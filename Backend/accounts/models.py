@@ -17,5 +17,12 @@ class User(AbstractUser):
 
     email = models.EmailField(unique=True)
 
+    technician_specialization = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Primary technical specialization for technician accounts.",
+    )
+
     def __str__(self):
         return f"{self.username} - {self.get_role_display()}"
