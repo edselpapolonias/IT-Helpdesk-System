@@ -1,0 +1,6 @@
+import { CheckCircle2 } from 'lucide-react'
+
+const dateFormatter = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+export default function TicketResolutionDetails({ resolutions }) {
+  return <section className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6"><div className="flex items-center gap-2"><CheckCircle2 size={17} className="text-emerald-700" /><h3 className="text-base font-semibold text-slate-900">Resolution details</h3></div>{resolutions.length === 0 ? <p className="mt-4 text-sm text-slate-500">No resolution has been recorded.</p> : <div className="mt-4 space-y-3">{resolutions.map((resolution, index) => <article key={resolution.id} className="rounded-md border border-emerald-100 bg-emerald-50/50 p-4"><p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">{resolutions.length > 1 ? `Resolution attempt ${index + 1}` : 'Resolution summary'}</p><p className="mt-2 text-sm leading-6 text-slate-700">{resolution.resolution_summary}</p><p className="mt-3 text-[11px] text-slate-500">Resolved by {resolution.resolved_by.name} · {dateFormatter.format(new Date(resolution.resolved_at))}</p><p className="mt-1 text-[11px] text-slate-400">User confirmation is not recorded in the current data model.</p></article>)}</div>}</section>
+}

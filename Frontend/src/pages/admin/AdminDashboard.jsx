@@ -6,7 +6,7 @@ import {
   RefreshCw,
   Ticket,
   UserRoundX,
-  Users,
+  AlertOctagon,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import QuickActions from '../../components/admin/dashboard/QuickActions'
@@ -104,8 +104,8 @@ export default function AdminDashboard() {
     { title: 'Open tickets', value: summary.open, icon: Inbox, tone: 'slate' },
     { title: 'In progress', value: summary.in_progress, icon: Activity, tone: 'blue' },
     { title: 'Resolved tickets', value: summary.resolved, icon: CheckCircle2, tone: 'green' },
+    { title: 'Critical tickets', value: summary.critical, icon: AlertOctagon, tone: 'violet' },
     { title: 'Unassigned tickets', value: summary.unassigned, icon: UserRoundX, tone: 'amber' },
-    { title: 'Active technicians', value: summary.active_technicians, icon: Users, tone: 'violet' },
   ]
 
   return (
@@ -176,6 +176,7 @@ export default function AdminDashboard() {
       <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.7fr)]">
         <TechnicianWorkload
           state={sections.workload}
+          activeTechnicians={summary.active_technicians}
           onRetry={() => loadSection('workload')}
         />
         <TicketsAttention

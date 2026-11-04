@@ -263,7 +263,10 @@ class PasswordSetupView(APIView):
             user_id = force_str(
                 urlsafe_base64_decode(serializer.validated_data["uid"])
             )
-            user = User.objects.get(pk=user_id, role=User.Role.USER)
+            user = User.objects.get(
+                pk=user_id,
+                role__in=(User.Role.USER, User.Role.TECHNICIAN),
+            )
         except (ValueError, TypeError, OverflowError, User.DoesNotExist):
             user = None
 

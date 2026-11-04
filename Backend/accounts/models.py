@@ -10,6 +10,13 @@ class User(AbstractUser):
         TECHNICIAN = "TECHNICIAN", "IT Technician"
         USER = "USER", "User"
 
+    class TechnicianSpecialization(models.TextChoices):
+        HARDWARE = "HARDWARE_SUPPORT", "Hardware Support"
+        SOFTWARE = "SOFTWARE_SUPPORT", "Software Support"
+        NETWORK = "NETWORK_SUPPORT", "Network Support"
+        SYSTEM_ADMIN = "SYSTEM_ADMINISTRATION", "System Administration"
+        GENERAL = "GENERAL_IT_SUPPORT", "General IT Support"
+
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
@@ -20,6 +27,7 @@ class User(AbstractUser):
 
     technician_specialization = models.CharField(
         max_length=120,
+        choices=TechnicianSpecialization.choices,
         blank=True,
         default="",
         help_text="Primary technical specialization for technician accounts.",

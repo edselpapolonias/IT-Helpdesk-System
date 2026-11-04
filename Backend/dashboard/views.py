@@ -48,12 +48,16 @@ class DashboardSummaryView(AdminDashboardAPIView):
                 "id", filter=Q(status=Ticket.Status.IN_PROGRESS)
             ),
             resolved=Count("id", filter=Q(status=Ticket.Status.RESOLVED)),
-            unassigned=Count(
+            critical=Count(
                 "id",
                 filter=Q(
-                    assigned_technician__isnull=True,
+                    priority=Ticket.Priority.CRITICAL,
                     status__in=ACTIONABLE_STATUSES,
                 ),
+            ),
+            unassigned=Count(
+                "id",
+                filter=Q(assigned_technician__isnull=True),
             ),
         )
         ticket_counts["active_technicians"] = User.objects.filter(

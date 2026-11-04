@@ -25,7 +25,7 @@ class RecentTicketSerializer(serializers.ModelSerializer):
         )
 
     def get_ticket_id(self, obj):
-        return f"TKT-{obj.id:05d}"
+        return obj.ticket_number
 
     def get_requester(self, obj):
         return obj.requester.get_full_name() or obj.requester.username
@@ -44,7 +44,7 @@ class RecentTicketSerializer(serializers.ModelSerializer):
 
 class TechnicianWorkloadSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
-    specialization = serializers.CharField(source="technician_specialization")
+    specialization = serializers.SerializerMethodField()
     active_assigned_tickets = serializers.IntegerField()
     resolved_tickets = serializers.IntegerField()
 
@@ -61,3 +61,6 @@ class TechnicianWorkloadSerializer(serializers.ModelSerializer):
 
     def get_name(self, obj):
         return obj.get_full_name() or obj.username
+
+    def get_specialization(self, obj):
+        return obj.get_technician_specialization_display()

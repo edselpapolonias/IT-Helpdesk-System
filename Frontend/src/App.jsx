@@ -11,6 +11,10 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const PlaceholderPage = lazy(() => import('./pages/admin/PlaceholderPage'))
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'))
 const UserDetailsPage = lazy(() => import('./pages/admin/UserDetailsPage'))
+const TechnicianManagement = lazy(() => import('./pages/admin/TechnicianManagement'))
+const TechnicianDetailsPage = lazy(() => import('./pages/admin/TechnicianDetailsPage'))
+const TicketManagement = lazy(() => import('./pages/admin/TicketManagement'))
+const TicketDetailsPage = lazy(() => import('./pages/admin/TicketDetailsPage'))
 const PasswordSetupPage = lazy(() => import('./pages/PasswordSetupPage'))
 
 function PageLoader() {
@@ -38,24 +42,8 @@ function App() {
               <Route path="/it-admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
-              <Route
-                path="tickets"
-                element={
-                  <PlaceholderPage
-                    title="Ticket Management"
-                    description="The ticket workspace is ready for the next module. Dashboard links and ticket filters are already routed here."
-                  />
-                }
-              />
-              <Route
-                path="tickets/:ticketId"
-                element={
-                  <PlaceholderPage
-                    title="Ticket Details"
-                    description="Detailed ticket review, activity history, and status updates will be implemented in the ticket management module."
-                  />
-                }
-              />
+              <Route path="tickets" element={<TicketManagement />} />
+              <Route path="tickets/:ticketId" element={<TicketDetailsPage />} />
               <Route
                 path="assignments"
                 element={
@@ -72,12 +60,11 @@ function App() {
               <Route path="users/:userId" element={<UserDetailsPage />} />
               <Route
                 path="technicians"
-                element={
-                  <PlaceholderPage
-                    title="Technician Management"
-                    description="Create technician accounts, maintain specializations, and manage account status."
-                  />
-                }
+                element={<TechnicianManagement />}
+              />
+              <Route
+                path="technicians/:technicianId"
+                element={<TechnicianDetailsPage />}
               />
               <Route
                 path="reports"

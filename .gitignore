@@ -20,6 +20,7 @@ env/
 db.sqlite3
 staticfiles/
 media/
+private_media/
 
 # Node / Vite
 node_modules/

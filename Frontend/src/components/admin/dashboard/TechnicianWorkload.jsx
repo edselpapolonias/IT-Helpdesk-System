@@ -2,7 +2,7 @@ import { ArrowRight, UserPlus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { EmptyState, SectionError } from './SectionState'
 
-export default function TechnicianWorkload({ state, onRetry }) {
+export default function TechnicianWorkload({ state, activeTechnicians, onRetry }) {
   const technicians = state.data?.results || []
 
   return (
@@ -12,12 +12,17 @@ export default function TechnicianWorkload({ state, onRetry }) {
           <h2 className="text-base font-semibold text-slate-900">Technician workload</h2>
           <p className="mt-1 text-xs text-slate-500">Active assignments and recent resolutions.</p>
         </div>
-        <Link
-          to="/it-admin/technicians"
-          className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-        >
-          View team <ArrowRight size={15} />
-        </Link>
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+            {activeTechnicians ?? 0} active
+          </span>
+          <Link
+            to="/it-admin/technicians"
+            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+          >
+            View team <ArrowRight size={15} />
+          </Link>
+        </div>
       </div>
 
       {state.loading ? (

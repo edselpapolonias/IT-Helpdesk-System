@@ -150,7 +150,7 @@ class UserTicketSerializer(serializers.ModelSerializer):
         )
 
     def get_ticket_id(self, obj):
-        return f"TKT-{obj.id:05d}"
+        return obj.ticket_number
 
     def get_category(self, obj):
         return obj.category.name if obj.category else "Uncategorized"

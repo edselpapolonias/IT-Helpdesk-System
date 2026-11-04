@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Ticket, TicketCategory
+from .models import (
+    Ticket,
+    TicketAttachment,
+    TicketCategory,
+    TicketPriorityHistory,
+    TicketResolution,
+    TicketStatusHistory,
+    TroubleshootingLog,
+)
 
 
 @admin.register(TicketCategory)
@@ -12,7 +20,7 @@ class TicketCategoryAdmin(admin.ModelAdmin):
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
     list_display = (
-        "id",
+        "ticket_number",
         "title",
         "requester",
         "priority",
@@ -23,3 +31,10 @@ class TicketAdmin(admin.ModelAdmin):
     list_filter = ("status", "priority", "category")
     search_fields = ("title", "description", "requester__email")
     autocomplete_fields = ("requester", "assigned_technician")
+
+
+admin.site.register(TicketStatusHistory)
+admin.site.register(TicketPriorityHistory)
+admin.site.register(TroubleshootingLog)
+admin.site.register(TicketResolution)
+admin.site.register(TicketAttachment)
