@@ -9,6 +9,9 @@ import LoginPage from './pages/LoginPage'
 
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const PlaceholderPage = lazy(() => import('./pages/admin/PlaceholderPage'))
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'))
+const UserDetailsPage = lazy(() => import('./pages/admin/UserDetailsPage'))
+const PasswordSetupPage = lazy(() => import('./pages/PasswordSetupPage'))
 
 function PageLoader() {
   return (
@@ -29,6 +32,7 @@ function App() {
           <Routes>
             <Route path="/" element={<LoginPage />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
+            <Route path="/set-password" element={<PasswordSetupPage />} />
 
             <Route element={<AdminProtectedRoute />}>
               <Route path="/it-admin" element={<AdminLayout />}>
@@ -63,13 +67,9 @@ function App() {
               />
               <Route
                 path="users"
-                element={
-                  <PlaceholderPage
-                    title="User Management"
-                    description="Create and manage regular user accounts from this workspace."
-                  />
-                }
+                element={<UserManagement />}
               />
+              <Route path="users/:userId" element={<UserDetailsPage />} />
               <Route
                 path="technicians"
                 element={
