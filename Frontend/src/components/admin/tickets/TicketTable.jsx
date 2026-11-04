@@ -1,11 +1,11 @@
-import { Eye, History, SearchX, Tag, Ticket } from 'lucide-react'
+import { Eye, History, SearchX, Tag, Ticket, UserRoundCog } from 'lucide-react'
 import TablePagination from '../common/TablePagination'
 import TicketBadge from './TicketBadge'
 import { priorityLabels, priorityTone, statusLabels, statusTone } from './constants'
 
 const dateFormatter = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
 
-export default function TicketTable({ state, page, pageSize, hasFilters, onPageChange, onRetry, onView, onPriority, onHistory }) {
+export default function TicketTable({ state, page, pageSize, hasFilters, onPageChange, onRetry, onView, onPriority, onHistory, onAssignment }) {
   const tickets = state.data?.results || []
   return (
     <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -16,12 +16,12 @@ export default function TicketTable({ state, page, pageSize, hasFilters, onPageC
           <td className="whitespace-nowrap px-4 py-3.5 pl-6 font-semibold text-emerald-700">{ticket.ticket_number}</td>
           <td className="max-w-56 px-4 py-3.5"><button type="button" onClick={() => onView(ticket)} className="line-clamp-2 text-left font-semibold text-slate-900 hover:text-emerald-700">{ticket.title}</button></td>
           <td className="px-4 py-3.5"><p className="font-medium text-slate-800">{ticket.requester.name}</p><p className="mt-0.5 text-[11px] text-slate-500">{ticket.requester.email}</p></td>
-          <td className="px-4 py-3.5">{ticket.category.name}</td>
+          <td className="px-4 py-3.5">{ticket.category?.name || 'Uncategorized'}</td>
           <td className="px-4 py-3.5"><TicketBadge className={priorityTone(ticket.priority)}>{priorityLabels[ticket.priority]}</TicketBadge></td>
           <td className="px-4 py-3.5"><TicketBadge className={statusTone(ticket.status)}>{statusLabels[ticket.status]}</TicketBadge></td>
           <td className="px-4 py-3.5">{ticket.assigned_technician ? <><p className="font-medium text-slate-800">{ticket.assigned_technician.name}</p><p className="mt-0.5 text-[11px] text-slate-500">{ticket.assigned_technician.specialization}</p></> : <span className="font-medium text-amber-700">Unassigned</span>}</td>
           <td className="whitespace-nowrap px-4 py-3.5 text-slate-500">{dateFormatter.format(new Date(ticket.created_at))}</td>
-          <td className="px-4 py-3.5 pr-6"><div className="flex items-center gap-1"><button type="button" onClick={() => onView(ticket)} title="View details" className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-emerald-700"><Eye size={16} /></button><button type="button" onClick={() => onPriority(ticket)} title="Change priority" className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-emerald-700"><Tag size={16} /></button><button type="button" onClick={() => onHistory(ticket)} title="View history" className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-emerald-700"><History size={16} /></button></div></td>
+          <td className="px-4 py-3.5 pr-6"><div className="flex items-center gap-1"><button type="button" onClick={() => onView(ticket)} title="View details" className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-emerald-700"><Eye size={16} /></button><button type="button" onClick={() => onPriority(ticket)} title="Change priority" className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-emerald-700"><Tag size={16} /></button>{((!ticket.assigned_technician && ticket.status === 'OPEN') || (ticket.assigned_technician && ['ASSIGNED', 'IN_PROGRESS'].includes(ticket.status))) && <button type="button" onClick={() => onAssignment(ticket)} title={ticket.assigned_technician ? 'Reassign technician' : 'Assign technician'} className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-emerald-700"><UserRoundCog size={16} /></button>}<button type="button" onClick={() => onHistory(ticket)} title="View history" className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-emerald-700"><History size={16} /></button></div></td>
         </tr>)}</tbody></table></div>
         <TablePagination count={state.data?.count || 0} page={page} pageSize={pageSize} onPageChange={onPageChange} itemLabel="tickets" />
       </>}

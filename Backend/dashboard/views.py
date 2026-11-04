@@ -57,7 +57,10 @@ class DashboardSummaryView(AdminDashboardAPIView):
             ),
             unassigned=Count(
                 "id",
-                filter=Q(assigned_technician__isnull=True),
+                filter=Q(
+                    status__in=ACTIONABLE_STATUSES,
+                    assigned_technician__isnull=True,
+                ),
             ),
         )
         ticket_counts["active_technicians"] = User.objects.filter(

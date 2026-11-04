@@ -1,7 +1,18 @@
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q, Value
+from django.db.models import (
+    Avg,
+    Count,
+    DateTimeField,
+    DurationField,
+    ExpressionWrapper,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    Value,
+)
 from django.db.models.functions import Concat, Lower, TruncDate
 from django.utils import timezone
 from rest_framework import generics, status
@@ -12,7 +23,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from tickets.models import Ticket
+from tickets.models import Ticket, TicketAssignment
 
 from .models import User, UserAuditLog
 from .permissions import IsITAdministrator
@@ -67,6 +78,7 @@ def annotated_technicians():
             distinct=True,
         ),
         total_current_assignments=Count("assigned_tickets", distinct=True),
+        total_historical_assignments=Count("ticket_assignments", distinct=True),
         in_progress_tickets=Count(
             "assigned_tickets",
             filter=Q(assigned_tickets__status=Ticket.Status.IN_PROGRESS),
@@ -260,8 +272,16 @@ class AdminTechnicianStatisticsView(AdminTechnicianMixin, APIView):
 class AdminTechnicianStatusView(AdminTechnicianMixin, APIView):
     action = None
 
+    @transaction.atomic
     def post(self, request, pk):
-        technician = self.get_object()
+        try:
+            locked = User.objects.select_for_update().get(
+                pk=pk,
+                role=User.Role.TECHNICIAN,
+            )
+        except User.DoesNotExist as exc:
+            raise NotFound("Technician account not found.") from exc
+        technician = annotated_technicians().get(pk=locked.pk)
         if self.action == "deactivate":
             active_count = technician.active_assigned_tickets
             if active_count:
@@ -309,8 +329,20 @@ class AdminTechnicianStatusView(AdminTechnicianMixin, APIView):
 class AdminTechnicianTicketsView(AdminTechnicianMixin, APIView):
     def get(self, request, pk):
         technician = self.get_object()
-        tickets = Ticket.objects.filter(assigned_technician=technician).select_related(
-            "category"
+        current_assignment = TicketAssignment.objects.filter(
+            ticket_id=OuterRef("pk"),
+            technician=technician,
+            is_current=True,
+        ).order_by("-id")
+        tickets = (
+            Ticket.objects.filter(assigned_technician=technician)
+            .select_related("category")
+            .annotate(
+                current_assignment_date=Subquery(
+                    current_assignment.values("assigned_at")[:1],
+                    output_field=DateTimeField(),
+                )
+            )
         )
         active = tickets.filter(status__in=ACTIVE_TICKET_STATUSES).order_by(
             "-created_at"
@@ -324,7 +356,7 @@ class AdminTechnicianTicketsView(AdminTechnicianMixin, APIView):
                 "completed_tickets": TechnicianTicketSerializer(
                     completed[:10], many=True
                 ).data,
-                "assignment_date_available": False,
+                "assignment_date_available": True,
             }
         )
 

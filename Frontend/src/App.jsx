@@ -15,6 +15,7 @@ const TechnicianManagement = lazy(() => import('./pages/admin/TechnicianManageme
 const TechnicianDetailsPage = lazy(() => import('./pages/admin/TechnicianDetailsPage'))
 const TicketManagement = lazy(() => import('./pages/admin/TicketManagement'))
 const TicketDetailsPage = lazy(() => import('./pages/admin/TicketDetailsPage'))
+const TechnicianAssignment = lazy(() => import('./pages/admin/TechnicianAssignment'))
 const PasswordSetupPage = lazy(() => import('./pages/PasswordSetupPage'))
 
 function PageLoader() {
@@ -44,15 +45,7 @@ function App() {
               <Route path="dashboard" element={<AdminDashboard />} />
               <Route path="tickets" element={<TicketManagement />} />
               <Route path="tickets/:ticketId" element={<TicketDetailsPage />} />
-              <Route
-                path="assignments"
-                element={
-                  <PlaceholderPage
-                    title="Technician Assignment"
-                    description="Assign unassigned requests and review technician workloads from this workspace."
-                  />
-                }
-              />
+              <Route path="assignments" element={<TechnicianAssignment />} />
               <Route
                 path="users"
                 element={<UserManagement />}

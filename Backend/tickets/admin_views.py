@@ -192,7 +192,11 @@ class AdminTicketStatisticsView(AdminTicketMixin, APIView):
                 ),
             ),
             unassigned=Count(
-                "id", filter=Q(assigned_technician__isnull=True)
+                "id",
+                filter=Q(
+                    status__in=ACTIONABLE_STATUSES,
+                    assigned_technician__isnull=True,
+                ),
             ),
         )
         return Response(counts)
@@ -307,6 +311,34 @@ class AdminTicketHistoryView(AdminTicketMixin, APIView):
                     "actor": item.changed_by.get_full_name()
                     or item.changed_by.username,
                     "timestamp": item.changed_at,
+                }
+            )
+        assignments = ticket.assignment_history.select_related(
+            "technician", "assigned_by"
+        ).order_by("assigned_at", "id")
+        for index, item in enumerate(assignments):
+            technician_name = item.technician.get_full_name() or item.technician.username
+            description = (
+                item.reassignment_reason
+                if index > 0 and item.reassignment_reason
+                else item.assignment_notes
+            )
+            events.append(
+                {
+                    "type": "assignment",
+                    "title": (
+                        f"Ticket reassigned to {technician_name}"
+                        if index > 0
+                        else f"Ticket assigned to {technician_name}"
+                    ),
+                    "description": description,
+                    "actor": (
+                        item.assigned_by.get_full_name()
+                        or item.assigned_by.username
+                        if item.assigned_by_id
+                        else "Legacy assignment import"
+                    ),
+                    "timestamp": item.assigned_at or ticket.created_at,
                 }
             )
         for item in ticket.troubleshooting_logs.select_related("technician"):

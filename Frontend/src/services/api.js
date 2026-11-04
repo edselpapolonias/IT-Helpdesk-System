@@ -35,7 +35,13 @@ export function getApiError(error, fallback = 'Something went wrong.') {
   if (!error.response) {
     return 'Unable to reach the server. Check that the backend is running.'
   }
-  return error.response.data?.detail || fallback
+  const data = error.response.data
+  if (typeof data?.detail === 'string') return data.detail
+  if (data && typeof data === 'object') {
+    const firstMessage = Object.values(data).flat().find((value) => typeof value === 'string')
+    if (firstMessage) return firstMessage
+  }
+  return fallback
 }
 
 export default api

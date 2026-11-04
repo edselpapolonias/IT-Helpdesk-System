@@ -1,6 +1,7 @@
 import { RefreshCw, Tickets } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import TechnicianAssignmentModal from '../../components/admin/assignments/TechnicianAssignmentModal'
 import TicketFilters from '../../components/admin/tickets/TicketFilters'
 import TicketPriorityModal from '../../components/admin/tickets/TicketPriorityModal'
 import TicketStats from '../../components/admin/tickets/TicketStats'
@@ -32,6 +33,7 @@ export default function TicketManagement() {
   const [statsState, setStatsState] = useState({ data: null, loading: true, error: '' })
   const [categories, setCategories] = useState([])
   const [priorityTicket, setPriorityTicket] = useState(null)
+  const [assignmentTicket, setAssignmentTicket] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [toast, setToast] = useState('')
 
@@ -58,14 +60,17 @@ export default function TicketManagement() {
   function updateFilter(key, value) { setFilters((current) => ({ ...current, [key]: value, ...(key === 'date' && value !== 'custom' ? { date_from: '', date_to: '' } : {}) })); if (key !== 'search') setPage(1) }
   async function refresh() { setRefreshing(true); await Promise.allSettled([loadList(), loadStats()]); setRefreshing(false) }
   async function prioritySaved(updated) { setPriorityTicket(null); setToast(`${updated.ticket_number} priority updated successfully.`); await Promise.allSettled([loadList(), loadStats()]) }
+  async function openAssignment(ticket) { try { setAssignmentTicket(await ticketService.get(ticket.id)) } catch (error) { setToast(getApiError(error, 'Unable to open the assignment form.')) } }
+  async function assignmentSaved(result, action) { setAssignmentTicket(null); setToast(`${result.ticket.ticket_number} ${action} successfully.`); await Promise.allSettled([loadList(), loadStats()]) }
 
   const hasFilters = debouncedSearch || filters.status !== 'all' || filters.priority !== 'all' || filters.category !== 'all' || filters.assignment !== 'all' || filters.date !== 'all' || filters.ordering !== '-created_at'
   return <div className="mx-auto max-w-[1600px] space-y-6">
     <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700"><Tickets size={15} /> Support operations</div><h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Ticket Management</h2><p className="mt-1.5 text-sm text-slate-600">Review, prioritize, and monitor technical support requests.</p></div><button type="button" onClick={refresh} disabled={refreshing} className="inline-flex h-10 w-fit items-center gap-2 rounded-md bg-[#075b35] px-4 text-xs font-semibold text-white hover:bg-[#06492c] disabled:opacity-60"><RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /> Refresh</button></section>
     <TicketStats state={statsState} />
     <TicketFilters filters={filters} categories={categories} onChange={updateFilter} onClear={() => { setFilters(emptyFilters); setPage(1) }} />
-    <TicketTable state={listState} page={page} pageSize={PAGE_SIZE} hasFilters={hasFilters} onPageChange={setPage} onRetry={() => loadList()} onView={(ticket) => navigate(`/it-admin/tickets/${ticket.id}`)} onPriority={setPriorityTicket} onHistory={(ticket) => navigate(`/it-admin/tickets/${ticket.id}#activity`)} />
+    <TicketTable state={listState} page={page} pageSize={PAGE_SIZE} hasFilters={hasFilters} onPageChange={setPage} onRetry={() => loadList()} onView={(ticket) => navigate(`/it-admin/tickets/${ticket.id}`)} onPriority={setPriorityTicket} onAssignment={openAssignment} onHistory={(ticket) => navigate(`/it-admin/tickets/${ticket.id}#activity`)} />
     <TicketPriorityModal ticket={priorityTicket} onClose={() => setPriorityTicket(null)} onSaved={prioritySaved} />
+    <TechnicianAssignmentModal ticket={assignmentTicket} onClose={() => setAssignmentTicket(null)} onSaved={assignmentSaved} />
     {toast && <div className="fixed bottom-5 right-5 z-[90] rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-emerald-800 shadow-lg" role="status">{toast}</div>}
   </div>
 }

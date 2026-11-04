@@ -107,9 +107,30 @@ class TicketDetailSerializer(serializers.ModelSerializer):
         }
 
     def get_assignment(self, obj):
+        assignment = (
+            obj.assignment_history.filter(is_current=True)
+            .select_related("assigned_by")
+            .first()
+        )
+        if assignment is not None:
+            return {
+                "id": assignment.id,
+                "assigned_at": assignment.assigned_at,
+                "assigned_by": (
+                    {
+                        "id": assignment.assigned_by_id,
+                        "name": display_name(assignment.assigned_by),
+                    }
+                    if assignment.assigned_by_id
+                    else None
+                ),
+                "assignment_notes": assignment.assignment_notes,
+                "history_available": True,
+            }
         return {
             "assigned_at": None,
             "assigned_by": None,
+            "assignment_notes": "",
             "history_available": False,
         }
 

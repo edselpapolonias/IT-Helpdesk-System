@@ -260,12 +260,12 @@ class TechnicianManagementAPITests(APITestCase):
         )
 
         self.assertEqual(detail.status_code, 200)
-        self.assertIsNone(detail.data["total_historical_assignments"])
+        self.assertEqual(detail.data["total_historical_assignments"], 0)
         self.assertEqual(detail.data["total_current_assignments"], 2)
         self.assertEqual(detail.data["active_assigned_tickets"], 1)
         self.assertEqual(detail.data["resolved_tickets"], 1)
         self.assertEqual(tickets.data["active_tickets"][0]["id"], active.id)
-        self.assertFalse(tickets.data["assignment_date_available"])
+        self.assertTrue(tickets.data["assignment_date_available"])
         self.assertEqual(performance.data["resolved_tickets"], 1)
         self.assertGreater(performance.data["average_resolution_seconds"], 7000)
         self.assertEqual(

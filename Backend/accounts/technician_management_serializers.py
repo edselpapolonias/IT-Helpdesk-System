@@ -40,7 +40,7 @@ class TechnicianListSerializer(serializers.ModelSerializer):
 
 class TechnicianDetailSerializer(TechnicianListSerializer):
     role = serializers.CharField(source="get_role_display", read_only=True)
-    total_historical_assignments = serializers.SerializerMethodField()
+    total_historical_assignments = serializers.IntegerField()
     total_current_assignments = serializers.IntegerField()
     in_progress_tickets = serializers.IntegerField()
     average_resolution_seconds = serializers.SerializerMethodField()
@@ -58,10 +58,6 @@ class TechnicianDetailSerializer(TechnicianListSerializer):
     def get_average_resolution_seconds(self, obj):
         duration = getattr(obj, "average_resolution_time", None)
         return duration.total_seconds() if duration is not None else None
-
-    def get_total_historical_assignments(self, obj):
-        return None
-
 
 class TechnicianCreateSerializer(EmailValidationMixin, serializers.ModelSerializer):
     specialization = serializers.ChoiceField(
@@ -119,7 +115,11 @@ class TechnicianUpdateSerializer(EmailValidationMixin, serializers.ModelSerializ
 class TechnicianTicketSerializer(serializers.ModelSerializer):
     ticket_id = serializers.SerializerMethodField()
     category = serializers.SerializerMethodField()
-    assignment_date = serializers.SerializerMethodField()
+    assignment_date = serializers.DateTimeField(
+        source="current_assignment_date",
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = Ticket
@@ -140,6 +140,3 @@ class TechnicianTicketSerializer(serializers.ModelSerializer):
 
     def get_category(self, obj):
         return obj.category.name if obj.category else "Uncategorized"
-
-    def get_assignment_date(self, obj):
-        return None

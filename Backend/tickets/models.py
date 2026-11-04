@@ -151,6 +151,62 @@ class Ticket(models.Model):
         super().save(*args, **kwargs)
 
 
+class TicketAssignment(models.Model):
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        related_name="assignment_history",
+    )
+    technician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="ticket_assignments",
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="performed_ticket_assignments",
+    )
+    assigned_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
+    unassigned_at = models.DateTimeField(null=True, blank=True)
+    assignment_notes = models.TextField(blank=True, default="")
+    reassignment_reason = models.TextField(blank=True, default="")
+    is_current = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ("-assigned_at", "-id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("ticket",),
+                condition=models.Q(is_current=True),
+                name="tickets_one_current_assignment_per_ticket",
+            )
+        ]
+        indexes = [
+            models.Index(fields=("technician", "is_current")),
+            models.Index(fields=("ticket", "-assigned_at")),
+        ]
+
+    def __str__(self):
+        return f"{self.ticket.ticket_number} assigned to {self.technician}"
+
+    def clean(self):
+        super().clean()
+        user_model = self.technician.__class__
+        if self.technician.role != user_model.Role.TECHNICIAN:
+            raise ValidationError({"technician": "Assigned user must be a technician."})
+        if self.is_current and not self.technician.is_active:
+            raise ValidationError(
+                {"technician": "Inactive technicians cannot receive assignments."}
+            )
+        if self.assigned_by_id and self.assigned_by.role != user_model.Role.ADMIN:
+            raise ValidationError(
+                {"assigned_by": "Assignments must be performed by an administrator."}
+            )
+
+
 class TicketStatusHistory(models.Model):
     ticket = models.ForeignKey(
         Ticket,
