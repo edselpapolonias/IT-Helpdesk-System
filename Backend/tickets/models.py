@@ -114,6 +114,9 @@ class Ticket(models.Model):
     resolution_due_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
+    requester_confirmed_at = models.DateTimeField(null=True, blank=True)
+    reopen_requested_at = models.DateTimeField(null=True, blank=True)
+    reopen_reason = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

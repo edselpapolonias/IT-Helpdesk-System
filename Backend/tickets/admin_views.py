@@ -261,6 +261,9 @@ class AdminTicketStatusView(AdminTicketMixin, APIView):
                     {"status": "A resolution record is required before resolving."}
                 )
             ticket.resolved_at = resolution.resolved_at
+            ticket.requester_confirmed_at = None
+            ticket.reopen_requested_at = None
+            ticket.reopen_reason = ""
         previous = ticket.status
         ticket.status = new_status
         ticket.save()

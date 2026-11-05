@@ -1,6 +1,17 @@
 import api from './api'
 
 export const userTicketService = {
+  async list(params = {}, config = {}) {
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([, value]) => value !== '' && value !== 'all'),
+    )
+    const response = await api.get('/user/tickets/', {
+      ...config,
+      params: cleanParams,
+    })
+    return response.data
+  },
+
   async categories(config = {}) {
     const response = await api.get('/ticket-categories/', config)
     return response.data
@@ -21,6 +32,18 @@ export const userTicketService = {
       `/user/tickets/${ticketId}/attachments/${attachmentId}/download/`,
       { responseType: 'blob' },
     )
+    return response.data
+  },
+
+  async confirmResolution(ticketId) {
+    const response = await api.post(`/user/tickets/${ticketId}/confirm-resolution/`)
+    return response.data
+  },
+
+  async requestReopen(ticketId, reason) {
+    const response = await api.post(`/user/tickets/${ticketId}/request-reopen/`, {
+      reason,
+    })
     return response.data
   },
 }

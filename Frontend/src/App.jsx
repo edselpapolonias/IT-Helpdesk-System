@@ -20,6 +20,7 @@ const TicketDetailsPage = lazy(() => import('./pages/admin/TicketDetailsPage'))
 const TechnicianAssignment = lazy(() => import('./pages/admin/TechnicianAssignment'))
 const UserDashboard = lazy(() => import('./pages/user/UserDashboard'))
 const SubmitTicket = lazy(() => import('./pages/user/SubmitTicket'))
+const MyTickets = lazy(() => import('./pages/user/MyTickets'))
 const UserTicketDetailsPage = lazy(() => import('./pages/user/UserTicketDetailsPage'))
 const PasswordSetupPage = lazy(() => import('./pages/PasswordSetupPage'))
 
@@ -28,7 +29,7 @@ function PageLoader() {
     <div className="grid min-h-56 place-items-center">
       <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
         <LoaderCircle size={18} className="animate-spin text-emerald-700" />
-        Loading page…
+        Loading page...
       </div>
     </div>
   )
@@ -99,7 +100,7 @@ function App() {
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<UserDashboard />} />
                 <Route path="tickets/new" element={<SubmitTicket />} />
-                <Route path="tickets" element={<PlaceholderPage title="My Tickets" description="The complete ticket list and filtering workspace will be introduced in the next Regular User module." />} />
+                <Route path="tickets" element={<MyTickets />} />
                 <Route path="tickets/:ticketId" element={<UserTicketDetailsPage />} />
                 <Route path="profile" element={<PlaceholderPage title="My Profile" description="Profile maintenance will be introduced in a future Regular User module." />} />
               </Route>

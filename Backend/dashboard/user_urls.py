@@ -7,6 +7,8 @@ from .user_views import (
     UserTicketAttachmentDownloadView,
     UserTicketCreateView,
     UserTicketDetailView,
+    UserTicketReopenRequestView,
+    UserTicketResolutionConfirmView,
 )
 
 
@@ -16,5 +18,7 @@ urlpatterns = [
     path("dashboard/recent-activity/", UserRecentActivityView.as_view(), name="user-dashboard-recent-activity"),
     path("tickets/", UserTicketCreateView.as_view(), name="user-ticket-create"),
     path("tickets/<int:pk>/", UserTicketDetailView.as_view(), name="user-ticket-detail"),
+    path("tickets/<int:pk>/confirm-resolution/", UserTicketResolutionConfirmView.as_view(), name="user-ticket-confirm-resolution"),
+    path("tickets/<int:pk>/request-reopen/", UserTicketReopenRequestView.as_view(), name="user-ticket-request-reopen"),
     path("tickets/<int:pk>/attachments/<int:attachment_id>/download/", UserTicketAttachmentDownloadView.as_view(), name="user-ticket-attachment-download"),
 ]

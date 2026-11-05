@@ -37,10 +37,73 @@ class UserRecentTicketSerializer(serializers.ModelSerializer):
         return obj.category.name if obj.category_id else "Uncategorized"
 
 
+def resolution_response(ticket):
+    if ticket.requester_confirmed_at:
+        return "CONFIRMED"
+    if ticket.reopen_requested_at:
+        return "REOPEN_REQUESTED"
+    if ticket.status == Ticket.Status.RESOLVED:
+        return "PENDING"
+    return "NOT_APPLICABLE"
+
+
+class UserTicketListSerializer(serializers.ModelSerializer):
+    category = serializers.SerializerMethodField()
+    assigned_technician = serializers.SerializerMethodField()
+    needs_confirmation = serializers.SerializerMethodField()
+    resolution_response = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Ticket
+        fields = (
+            "id",
+            "ticket_number",
+            "title",
+            "category",
+            "priority",
+            "status",
+            "assigned_technician",
+            "needs_confirmation",
+            "resolution_response",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_category(self, obj):
+        if obj.category_id is None:
+            return None
+        return {
+            "id": obj.category_id,
+            "name": obj.category.name,
+            "slug": obj.category.slug,
+        }
+
+    def get_assigned_technician(self, obj):
+        if obj.assigned_technician_id is None:
+            return None
+        return {
+            "id": obj.assigned_technician_id,
+            "name": obj.assigned_technician.get_full_name()
+            or obj.assigned_technician.username,
+            "specialization": (
+                obj.assigned_technician.get_technician_specialization_display()
+            ),
+        }
+
+    def get_needs_confirmation(self, obj):
+        return resolution_response(obj) == "PENDING"
+
+    def get_resolution_response(self, obj):
+        return resolution_response(obj)
+
+
 class UserTicketDetailSerializer(serializers.ModelSerializer):
     category = serializers.SerializerMethodField()
     assigned_technician = serializers.SerializerMethodField()
     attachments = serializers.SerializerMethodField()
+    resolution = serializers.SerializerMethodField()
+    needs_confirmation = serializers.SerializerMethodField()
+    resolution_response = serializers.SerializerMethodField()
 
     class Meta:
         model = Ticket
@@ -56,6 +119,12 @@ class UserTicketDetailSerializer(serializers.ModelSerializer):
             "status",
             "assigned_technician",
             "attachments",
+            "resolution",
+            "needs_confirmation",
+            "resolution_response",
+            "requester_confirmed_at",
+            "reopen_requested_at",
+            "reopen_reason",
             "created_at",
             "updated_at",
             "resolved_at",
@@ -95,6 +164,30 @@ class UserTicketDetailSerializer(serializers.ModelSerializer):
             }
             for attachment in obj.attachments.all()
         ]
+
+    def get_resolution(self, obj):
+        resolution = obj.resolutions.all().last()
+        if resolution is None:
+            return None
+        return {
+            "id": resolution.id,
+            "summary": resolution.resolution_summary,
+            "resolved_at": resolution.resolved_at,
+            "resolved_by": (
+                resolution.resolved_by.get_full_name()
+                or resolution.resolved_by.username
+            ),
+        }
+
+    def get_needs_confirmation(self, obj):
+        return resolution_response(obj) == "PENDING"
+
+    def get_resolution_response(self, obj):
+        return resolution_response(obj)
+
+
+class ReopenRequestSerializer(serializers.Serializer):
+    reason = serializers.CharField(min_length=10, max_length=1000, trim_whitespace=True)
 
 
 class UserTicketCreateSerializer(serializers.Serializer):
