@@ -22,6 +22,7 @@ const UserDashboard = lazy(() => import('./pages/user/UserDashboard'))
 const SubmitTicket = lazy(() => import('./pages/user/SubmitTicket'))
 const MyTickets = lazy(() => import('./pages/user/MyTickets'))
 const UserTicketDetailsPage = lazy(() => import('./pages/user/UserTicketDetailsPage'))
+const UserProfile = lazy(() => import('./pages/user/UserProfile'))
 const PasswordSetupPage = lazy(() => import('./pages/PasswordSetupPage'))
 
 function PageLoader() {
@@ -102,7 +103,7 @@ function App() {
                 <Route path="tickets/new" element={<SubmitTicket />} />
                 <Route path="tickets" element={<MyTickets />} />
                 <Route path="tickets/:ticketId" element={<UserTicketDetailsPage />} />
-                <Route path="profile" element={<PlaceholderPage title="My Profile" description="Profile maintenance will be introduced in a future Regular User module." />} />
+                <Route path="profile" element={<UserProfile />} />
               </Route>
             </Route>
 

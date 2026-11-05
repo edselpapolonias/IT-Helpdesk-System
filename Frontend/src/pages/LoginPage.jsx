@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   AlertCircle,
+  CheckCircle2,
   Eye,
   EyeOff,
   Headset,
@@ -99,6 +100,13 @@ export default function LoginPage() {
             <h2 id="login-heading">Sign in to your account</h2>
             <p>Enter your account details to continue.</p>
           </div>
+
+          {location.state?.notice && (
+            <div className="login-notice" role="status">
+              <CheckCircle2 size={18} aria-hidden="true" />
+              <span>{location.state.notice}</span>
+            </div>
+          )}
 
           {error && (
             <div className="login-error" role="alert">

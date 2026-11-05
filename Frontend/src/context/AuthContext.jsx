@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { authService } from '../services/authService'
+import { userProfileService } from '../services/userProfileService'
 import { AuthContext } from './authContextDefinition'
 
 export function AuthProvider({ children }) {
@@ -14,6 +15,27 @@ export function AuthProvider({ children }) {
   const [isCheckingSession, setIsCheckingSession] = useState(
     Boolean(localStorage.getItem('sam_admin_token')),
   )
+  const [avatarUrl, setAvatarUrl] = useState('')
+
+  const syncUser = useCallback((nextUser) => {
+    setUser((currentUser) => {
+      const mergedUser = currentUser ? { ...currentUser, ...nextUser } : nextUser
+      localStorage.setItem('sam_admin_user', JSON.stringify(mergedUser))
+      return mergedUser
+    })
+  }, [])
+
+  const endSession = useCallback(() => {
+    localStorage.removeItem('sam_admin_token')
+    localStorage.removeItem('sam_admin_user')
+    setUser(null)
+  }, [])
+
+  const refreshUser = useCallback(async () => {
+    const currentUser = await authService.getCurrentUser()
+    syncUser(currentUser)
+    return currentUser
+  }, [syncUser])
 
   useEffect(() => {
     const token = localStorage.getItem('sam_admin_token')
@@ -27,14 +49,11 @@ export function AuthProvider({ children }) {
         if (!['ADMIN', 'USER'].includes(currentUser.role)) {
           throw new Error('This account does not have an available portal.')
         }
-        setUser(currentUser)
-        localStorage.setItem('sam_admin_user', JSON.stringify(currentUser))
+        syncUser(currentUser)
       })
       .catch(() => {
         if (!active) return
-        localStorage.removeItem('sam_admin_token')
-        localStorage.removeItem('sam_admin_user')
-        setUser(null)
+        endSession()
       })
       .finally(() => {
         if (active) setIsCheckingSession(false)
@@ -43,29 +62,59 @@ export function AuthProvider({ children }) {
     return () => {
       active = false
     }
-  }, [])
+  }, [endSession, syncUser])
 
-  async function login(credentials) {
+  useEffect(() => {
+    if (!user?.has_avatar) {
+      return undefined
+    }
+
+    const controller = new AbortController()
+    let objectUrl = ''
+    userProfileService
+      .getAvatar({ signal: controller.signal })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob)
+        setAvatarUrl(objectUrl)
+      })
+      .catch((error) => {
+        if (error.code !== 'ERR_CANCELED') setAvatarUrl('')
+      })
+    return () => {
+      controller.abort()
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [user?.avatar_version, user?.has_avatar])
+
+  const login = useCallback(async (credentials) => {
     const result = await authService.login(credentials)
     localStorage.setItem('sam_admin_token', result.token)
-    localStorage.setItem('sam_admin_user', JSON.stringify(result.user))
-    setUser(result.user)
+    syncUser(result.user)
     return result.user
-  }
+  }, [syncUser])
 
-  async function logout() {
+  const logout = useCallback(async () => {
     try {
       await authService.logout()
     } finally {
-      localStorage.removeItem('sam_admin_token')
-      localStorage.removeItem('sam_admin_user')
-      setUser(null)
+      endSession()
     }
-  }
+  }, [endSession])
+
+  const visibleAvatarUrl = user?.has_avatar ? avatarUrl : ''
 
   const value = useMemo(
-    () => ({ user, isCheckingSession, login, logout }),
-    [user, isCheckingSession],
+    () => ({
+      user,
+      avatarUrl: visibleAvatarUrl,
+      isCheckingSession,
+      login,
+      logout,
+      syncUser,
+      refreshUser,
+      endSession,
+    }),
+    [user, visibleAvatarUrl, isCheckingSession, login, logout, syncUser, refreshUser, endSession],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

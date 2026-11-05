@@ -1,6 +1,13 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models.functions import Lower
+from pathlib import Path
+from uuid import uuid4
+
+
+def profile_avatar_upload_path(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return f"profile_avatars/{instance.pk}/{uuid4().hex}{extension}"
 
 
 class User(AbstractUser):
@@ -35,6 +42,12 @@ class User(AbstractUser):
 
     department = models.CharField(max_length=150, blank=True, default="")
     contact_number = models.CharField(max_length=30, blank=True, default="")
+    profile_image = models.FileField(
+        upload_to=profile_avatar_upload_path,
+        blank=True,
+        default="",
+    )
+    profile_image_updated_at = models.DateTimeField(null=True, blank=True)
     account_setup_completed = models.BooleanField(
         default=True,
         help_text="Whether the user has created a usable account password.",
