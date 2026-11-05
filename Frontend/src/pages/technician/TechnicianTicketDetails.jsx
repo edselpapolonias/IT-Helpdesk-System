@@ -1,6 +1,6 @@
 import { AlertCircle, ArrowLeft, CheckCircle2, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import AttachmentPreviewDialog from '../../components/user/tickets/AttachmentPreviewDialog'
 import AddTroubleshootingDialog from '../../components/technician/tickets/AddTroubleshootingDialog'
 import AssignmentInformation from '../../components/technician/tickets/AssignmentInformation'
@@ -22,6 +22,7 @@ const emptyRelated = { history: [], attachments: [], troubleshooting: [], resolu
 export default function TechnicianTicketDetails() {
   const { ticketId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [state, setState] = useState({ data: null, loading: true, error: '' })
   const [related, setRelated] = useState(emptyRelated)
   const [startOpen, setStartOpen] = useState(false)
@@ -33,7 +34,7 @@ export default function TechnicianTicketDetails() {
   const [attachmentLoading, setAttachmentLoading] = useState(null)
   const [attachmentError, setAttachmentError] = useState('')
   const [preview, setPreview] = useState(null)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(() => location.state?.success || '')
 
   const loadTicket = useCallback(async (signal) => {
     setState((current) => ({ ...current, loading: true, error: '' }))

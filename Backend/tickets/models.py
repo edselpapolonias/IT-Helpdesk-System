@@ -309,10 +309,28 @@ class TicketResolution(models.Model):
         related_name="ticket_resolutions",
     )
     resolution_summary = models.TextField()
+    root_cause = models.TextField(blank=True, default="")
+    actions_performed = models.TextField(blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    submission_key = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
     resolved_at = models.DateTimeField(default=timezone.now)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    reopened_at = models.DateTimeField(null=True, blank=True)
+    reopen_reason = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ("resolved_at",)
+        indexes = [
+            models.Index(
+                fields=("resolved_by", "-resolved_at"),
+                name="tickets_res_resolver_date_idx",
+            ),
+        ]
 
 
 class TicketAttachment(models.Model):
@@ -328,6 +346,13 @@ class TicketAttachment(models.Model):
     )
     troubleshooting_log = models.ForeignKey(
         TroubleshootingLog,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
+    resolution = models.ForeignKey(
+        TicketResolution,
         on_delete=models.CASCADE,
         null=True,
         blank=True,

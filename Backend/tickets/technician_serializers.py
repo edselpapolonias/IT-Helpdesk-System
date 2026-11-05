@@ -21,6 +21,32 @@ ALLOWED_TROUBLESHOOTING_ATTACHMENTS = {
 }
 
 
+def validate_supporting_attachments(files):
+    if len(files) > MAX_TROUBLESHOOTING_ATTACHMENTS:
+        raise serializers.ValidationError(
+            f"A maximum of {MAX_TROUBLESHOOTING_ATTACHMENTS} attachments is allowed."
+        )
+    for upload in files:
+        safe_name = Path(upload.name).name
+        extension = Path(safe_name).suffix.lower()
+        expected_signature = ALLOWED_TROUBLESHOOTING_ATTACHMENTS.get(extension)
+        if expected_signature is None:
+            raise serializers.ValidationError(
+                "Only JPG, JPEG, PNG, and PDF attachments are allowed."
+            )
+        if upload.size > MAX_ATTACHMENT_SIZE:
+            raise serializers.ValidationError(
+                f"{safe_name} exceeds the 10 MB file size limit."
+            )
+        signature = upload.read(8)
+        upload.seek(0)
+        if not signature.startswith(expected_signature):
+            raise serializers.ValidationError(
+                f"{safe_name} does not match its file extension."
+            )
+    return files
+
+
 def display_name(user):
     return user.get_full_name() or user.username
 
@@ -295,37 +321,133 @@ class TechnicianTroubleshootingCreateSerializer(serializers.Serializer):
     )
 
     def validate_attachments(self, files):
-        if len(files) > MAX_TROUBLESHOOTING_ATTACHMENTS:
-            raise serializers.ValidationError(
-                f"A maximum of {MAX_TROUBLESHOOTING_ATTACHMENTS} attachments is allowed."
-            )
-        for upload in files:
-            safe_name = Path(upload.name).name
-            extension = Path(safe_name).suffix.lower()
-            expected_signature = ALLOWED_TROUBLESHOOTING_ATTACHMENTS.get(extension)
-            if expected_signature is None:
-                raise serializers.ValidationError(
-                    "Only JPG, JPEG, PNG, and PDF attachments are allowed."
-                )
-            if upload.size > MAX_ATTACHMENT_SIZE:
-                raise serializers.ValidationError(
-                    f"{safe_name} exceeds the 10 MB file size limit."
-                )
-            signature = upload.read(8)
-            upload.seek(0)
-            if not signature.startswith(expected_signature):
-                raise serializers.ValidationError(
-                    f"{safe_name} does not match its file extension."
-                )
-        return files
+        return validate_supporting_attachments(files)
 
 
 class TechnicianResolutionSerializer(serializers.ModelSerializer):
     resolved_by = serializers.SerializerMethodField()
+    attachments = TechnicianAttachmentSerializer(many=True, read_only=True)
+    outcome = serializers.SerializerMethodField()
 
     class Meta:
         model = TicketResolution
-        fields = ("id", "resolved_by", "resolution_summary", "resolved_at")
+        fields = (
+            "id",
+            "resolved_by",
+            "resolution_summary",
+            "root_cause",
+            "actions_performed",
+            "notes",
+            "resolved_at",
+            "closed_at",
+            "reopened_at",
+            "reopen_reason",
+            "outcome",
+            "attachments",
+        )
 
     def get_resolved_by(self, obj):
         return {"id": obj.resolved_by_id, "name": display_name(obj.resolved_by)}
+
+    def get_outcome(self, obj):
+        if obj.reopened_at:
+            return "REOPENED"
+        if obj.closed_at:
+            return "CLOSED"
+        return "AWAITING_CONFIRMATION"
+
+
+class TechnicianResolutionCreateSerializer(serializers.Serializer):
+    resolution_summary = serializers.CharField(
+        max_length=5000,
+        trim_whitespace=True,
+    )
+    root_cause = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=5000,
+        trim_whitespace=True,
+    )
+    actions_performed = serializers.CharField(
+        max_length=5000,
+        trim_whitespace=True,
+    )
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=5000,
+        trim_whitespace=True,
+    )
+    confirmed_accurate = serializers.BooleanField()
+    submission_key = serializers.UUIDField()
+    attachments = serializers.ListField(
+        child=serializers.FileField(),
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate_confirmed_accurate(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "Confirm that the troubleshooting and resolution record is accurate."
+            )
+        return value
+
+    def validate_attachments(self, files):
+        return validate_supporting_attachments(files)
+
+
+class TechnicianCompletedResolutionSerializer(TechnicianResolutionSerializer):
+    ticket = serializers.SerializerMethodField()
+    can_view_ticket = serializers.SerializerMethodField()
+    attempt_number = serializers.SerializerMethodField()
+
+    class Meta(TechnicianResolutionSerializer.Meta):
+        fields = TechnicianResolutionSerializer.Meta.fields + (
+            "ticket",
+            "can_view_ticket",
+            "attempt_number",
+        )
+
+    def get_ticket(self, obj):
+        return {
+            "id": obj.ticket_id,
+            "ticket_number": obj.ticket.ticket_number,
+            "title": obj.ticket.title,
+            "category": (
+                {
+                    "id": obj.ticket.category_id,
+                    "name": obj.ticket.category.name,
+                    "slug": obj.ticket.category.slug,
+                }
+                if obj.ticket.category_id
+                else None
+            ),
+            "priority": obj.ticket.priority,
+            "status": obj.ticket.status,
+        }
+
+    def get_can_view_ticket(self, obj):
+        request = self.context.get("request")
+        if request is None:
+            return True
+        user = request.user
+        if obj.ticket.status in {Ticket.Status.RESOLVED, Ticket.Status.CLOSED}:
+            return True
+        return (
+            obj.ticket.assigned_technician_id == user.id
+            and obj.ticket.assignment_history.filter(
+                technician=user,
+                is_current=True,
+            ).exists()
+        )
+
+    def get_attempt_number(self, obj):
+        resolutions = sorted(
+            obj.ticket.resolutions.all(),
+            key=lambda resolution: (resolution.resolved_at, resolution.id),
+        )
+        return next(
+            (index for index, resolution in enumerate(resolutions, start=1) if resolution.id == obj.id),
+            1,
+        )

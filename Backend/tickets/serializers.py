@@ -208,13 +208,42 @@ class TroubleshootingVisibilitySerializer(serializers.Serializer):
 
 class TicketResolutionSerializer(serializers.ModelSerializer):
     resolved_by = serializers.SerializerMethodField()
+    attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = TicketResolution
-        fields = ("id", "resolved_by", "resolution_summary", "resolved_at")
+        fields = (
+            "id",
+            "resolved_by",
+            "resolution_summary",
+            "root_cause",
+            "actions_performed",
+            "notes",
+            "resolved_at",
+            "closed_at",
+            "reopened_at",
+            "reopen_reason",
+            "attachments",
+        )
 
     def get_resolved_by(self, obj):
         return {"id": obj.resolved_by_id, "name": display_name(obj.resolved_by)}
+
+    def get_attachments(self, obj):
+        return [
+            {
+                "id": attachment.id,
+                "original_filename": attachment.original_filename,
+                "file_size": attachment.file_size,
+                "file_type": Path(attachment.original_filename).suffix.lstrip(".").upper()
+                or "FILE",
+                "download_url": (
+                    f"/api/admin/tickets/{obj.ticket_id}/attachments/"
+                    f"{attachment.id}/download/"
+                ),
+            }
+            for attachment in obj.attachments.all()
+        ]
 
 
 class TicketAttachmentSerializer(serializers.ModelSerializer):

@@ -31,6 +31,10 @@ urlpatterns = [
         "api/technician/troubleshooting/",
         include("tickets.technician_troubleshooting_urls"),
     ),
+    path(
+        "api/technician/completed/",
+        include("tickets.technician_completed_urls"),
+    ),
     path("api/technician/tickets/", include("tickets.technician_urls")),
     path("api/user/", include("dashboard.user_urls")),
     path("api/ticket-categories/", include("tickets.urls")),

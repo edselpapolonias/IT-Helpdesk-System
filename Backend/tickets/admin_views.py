@@ -278,6 +278,33 @@ class AdminTicketStatusView(AdminTicketMixin, APIView):
             ticket.requester_confirmed_at = None
             ticket.reopen_requested_at = None
             ticket.reopen_reason = ""
+        elif new_status == Ticket.Status.CLOSED:
+            resolution = ticket.resolutions.select_for_update().order_by(
+                "-resolved_at", "-id"
+            ).first()
+            if resolution is None:
+                raise ValidationError(
+                    {"status": "A resolution record is required before closing."}
+                )
+            closed_at = timezone.now()
+            ticket.closed_at = closed_at
+            resolution.closed_at = closed_at
+            resolution.save(update_fields=("closed_at",))
+        elif new_status == Ticket.Status.REOPENED:
+            resolution = ticket.resolutions.select_for_update().order_by(
+                "-resolved_at", "-id"
+            ).first()
+            if resolution is None:
+                raise ValidationError(
+                    {"status": "A resolution record is required before reopening."}
+                )
+            reopened_at = timezone.now()
+            reason = serializer.validated_data.get("reason", "")
+            ticket.reopen_requested_at = reopened_at
+            ticket.reopen_reason = reason
+            resolution.reopened_at = reopened_at
+            resolution.reopen_reason = reason
+            resolution.save(update_fields=("reopened_at", "reopen_reason"))
         previous = ticket.status
         ticket.status = new_status
         ticket.save()
@@ -422,7 +449,9 @@ class AdminTicketTroubleshootingVisibilityView(AdminTicketMixin, APIView):
 class AdminTicketResolutionsView(AdminTicketMixin, APIView):
     def get(self, request, pk):
         ticket = self.get_object()
-        resolutions = ticket.resolutions.select_related("resolved_by")
+        resolutions = ticket.resolutions.select_related(
+            "resolved_by"
+        ).prefetch_related("attachments")
         return Response(
             {"results": TicketResolutionSerializer(resolutions, many=True).data}
         )

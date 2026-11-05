@@ -3,7 +3,21 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.db import IntegrityError, transaction
-from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.db.models import (
+    Avg,
+    Case,
+    Count,
+    DateTimeField,
+    DurationField,
+    ExpressionWrapper,
+    F,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    Value,
+    When,
+)
 from django.db.models.functions import Concat
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -22,11 +36,14 @@ from .models import (
     Ticket,
     TicketAssignment,
     TicketAttachment,
+    TicketResolution,
     TicketStatusHistory,
     TroubleshootingLog,
 )
 from .technician_serializers import (
     TechnicianAttachmentSerializer,
+    TechnicianCompletedResolutionSerializer,
+    TechnicianResolutionCreateSerializer,
     TechnicianResolutionSerializer,
     TechnicianTicketDetailSerializer,
     TechnicianTicketListSerializer,
@@ -58,6 +75,12 @@ class TechnicianTicketPagination(PageNumberPagination):
 
 
 class TechnicianTroubleshootingPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 50
+
+
+class TechnicianCompletedPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = "page_size"
     max_page_size = 50
@@ -330,6 +353,168 @@ class TechnicianTicketStartWorkView(TechnicianTicketMixin, APIView):
                     "current",
                 ).data,
             }
+        )
+
+
+class TechnicianTicketResolveView(TechnicianTicketMixin, APIView):
+    def post(self, request, pk):
+        payload = {
+            "resolution_summary": request.data.get("resolution_summary", ""),
+            "root_cause": request.data.get("root_cause", ""),
+            "actions_performed": request.data.get("actions_performed", ""),
+            "notes": request.data.get("notes", ""),
+            "confirmed_accurate": request.data.get("confirmed_accurate", False),
+            "submission_key": request.data.get("submission_key", ""),
+            "attachments": request.FILES.getlist("attachments"),
+        }
+        serializer = TechnicianResolutionCreateSerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        submission_key = values["submission_key"]
+
+        existing = TicketResolution.objects.filter(
+            submission_key=submission_key,
+            ticket_id=pk,
+            resolved_by=request.user,
+        ).select_related(
+            "resolved_by",
+            "ticket",
+            "ticket__category",
+            "ticket__requester",
+        ).prefetch_related(
+            "attachments__uploaded_by"
+        ).first()
+        if existing is not None:
+            data = TechnicianResolutionSerializer(existing).data
+            data["duplicate_submission"] = True
+            return Response(
+                {
+                    "detail": "This resolution was already recorded.",
+                    "resolution": data,
+                    "duplicate_submission": True,
+                }
+            )
+
+        saved_attachments = []
+        try:
+            with transaction.atomic():
+                ticket, assignment, _ = technician_ticket_access(
+                    request.user,
+                    pk,
+                    require_current=True,
+                    lock=True,
+                )
+                existing_after_lock = TicketResolution.objects.filter(
+                    submission_key=submission_key,
+                    ticket=ticket,
+                    resolved_by=request.user,
+                ).select_related("resolved_by").prefetch_related(
+                    "attachments__uploaded_by"
+                ).first()
+                if existing_after_lock is not None:
+                    data = TechnicianResolutionSerializer(existing_after_lock).data
+                    data["duplicate_submission"] = True
+                    return Response(
+                        {
+                            "detail": "This resolution was already recorded.",
+                            "resolution": data,
+                            "duplicate_submission": True,
+                        }
+                    )
+                if ticket.status != Ticket.Status.IN_PROGRESS:
+                    raise ValidationError(
+                        {"status": "Only In Progress tickets can be resolved."}
+                    )
+                if not ticket.can_transition_to(Ticket.Status.RESOLVED):
+                    raise ValidationError(
+                        {"status": "This ticket cannot transition to Resolved."}
+                    )
+
+                resolved_at = timezone.now()
+                resolution = TicketResolution.objects.create(
+                    ticket=ticket,
+                    resolved_by=request.user,
+                    resolution_summary=values["resolution_summary"],
+                    root_cause=values.get("root_cause", ""),
+                    actions_performed=values["actions_performed"],
+                    notes=values.get("notes", ""),
+                    submission_key=submission_key,
+                    resolved_at=resolved_at,
+                )
+                for upload in values.get("attachments", []):
+                    attachment = TicketAttachment(
+                        ticket=ticket,
+                        resolution=resolution,
+                        uploaded_by=request.user,
+                        file=upload,
+                        original_filename=Path(upload.name).name,
+                        file_size=upload.size,
+                        is_requester_visible=False,
+                    )
+                    attachment.full_clean()
+                    saved_attachments.append(attachment)
+                    attachment.save()
+
+                ticket.status = Ticket.Status.RESOLVED
+                ticket.resolved_at = resolved_at
+                ticket.closed_at = None
+                ticket.requester_confirmed_at = None
+                ticket.reopen_requested_at = None
+                ticket.reopen_reason = ""
+                ticket.save(
+                    update_fields=(
+                        "status",
+                        "resolved_at",
+                        "closed_at",
+                        "requester_confirmed_at",
+                        "reopen_requested_at",
+                        "reopen_reason",
+                        "updated_at",
+                    )
+                )
+                TicketStatusHistory.objects.create(
+                    ticket=ticket,
+                    previous_status=Ticket.Status.IN_PROGRESS,
+                    new_status=Ticket.Status.RESOLVED,
+                    changed_by=request.user,
+                    reason="Technician recorded the completed resolution.",
+                )
+        except IntegrityError:
+            for attachment in saved_attachments:
+                attachment.file.delete(save=False)
+            existing = get_object_or_404(
+                TicketResolution.objects.select_related("resolved_by").prefetch_related(
+                    "attachments__uploaded_by"
+                ),
+                submission_key=submission_key,
+                ticket_id=pk,
+                resolved_by=request.user,
+            )
+            data = TechnicianResolutionSerializer(existing).data
+            data["duplicate_submission"] = True
+            return Response(
+                {
+                    "detail": "This resolution was already recorded.",
+                    "resolution": data,
+                    "duplicate_submission": True,
+                }
+            )
+        except Exception:
+            for attachment in saved_attachments:
+                attachment.file.delete(save=False)
+            raise
+
+        resolution = TicketResolution.objects.select_related(
+            "resolved_by"
+        ).prefetch_related("attachments__uploaded_by").get(pk=resolution.pk)
+        return Response(
+            {
+                "detail": "Resolution recorded. The ticket is awaiting requester confirmation.",
+                "resolution": TechnicianResolutionSerializer(resolution).data,
+                "ticket": detail_serializer(ticket, assignment, "historical").data,
+                "duplicate_submission": False,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -609,7 +794,9 @@ class TechnicianTicketTroubleshootingView(TechnicianTicketMixin, APIView):
 class TechnicianTicketResolutionsView(TechnicianTicketMixin, APIView):
     def get(self, request, pk):
         ticket, _, _ = technician_ticket_access(request.user, pk)
-        resolutions = ticket.resolutions.select_related("resolved_by")
+        resolutions = ticket.resolutions.select_related(
+            "resolved_by"
+        ).prefetch_related("attachments__uploaded_by")
         return Response(
             {"results": TechnicianResolutionSerializer(resolutions, many=True).data}
         )
@@ -688,4 +875,113 @@ class TechnicianTroubleshootingDetailView(TechnicianTicketMixin, APIView):
                 log,
                 context={"request": request},
             ).data
+        )
+
+
+class TechnicianCompletedListView(TechnicianTicketMixin, generics.ListAPIView):
+    serializer_class = TechnicianCompletedResolutionSerializer
+    pagination_class = TechnicianCompletedPagination
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "request": self.request}
+
+    def get_queryset(self):
+        queryset = TicketResolution.objects.filter(
+            resolved_by=self.request.user
+        ).select_related(
+            "resolved_by", "ticket", "ticket__category"
+        ).prefetch_related(
+            "attachments__uploaded_by",
+            "ticket__resolutions",
+        )
+        params = self.request.query_params
+        search = params.get("search", "").strip()
+        category = params.get("category", "all").strip()
+        ticket_status = params.get("status", "all").strip().upper()
+        date_from = optional_date(params.get("date_from"), "date_from")
+        date_to = optional_date(params.get("date_to"), "date_to")
+
+        if search:
+            queryset = queryset.filter(
+                Q(ticket__ticket_number__icontains=search)
+                | Q(ticket__title__icontains=search)
+                | Q(resolution_summary__icontains=search)
+                | Q(root_cause__icontains=search)
+                | Q(actions_performed__icontains=search)
+            )
+        if category != "all":
+            queryset = queryset.filter(ticket__category__slug=category)
+        valid_statuses = {value for value, _ in Ticket.Status.choices}
+        if ticket_status != "ALL":
+            if ticket_status not in valid_statuses:
+                raise ValidationError({"status": "Invalid ticket status."})
+            queryset = queryset.filter(ticket__status=ticket_status)
+        if date_from:
+            queryset = queryset.filter(resolved_at__date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(resolved_at__date__lte=date_to)
+        if date_from and date_to and date_from > date_to:
+            raise ValidationError(
+                {"date_to": "End date must be on or after the start date."}
+            )
+
+        ordering = params.get("ordering", "-resolved_at")
+        orderings = {
+            "-resolved_at": ("-resolved_at", "-id"),
+            "resolved_at": ("resolved_at", "id"),
+            "ticket": ("ticket__ticket_number", "-resolved_at"),
+            "-closed_at": ("-closed_at", "-resolved_at"),
+        }
+        if ordering not in orderings:
+            raise ValidationError({"ordering": "Unsupported ordering value."})
+        return queryset.order_by(*orderings[ordering])
+
+
+class TechnicianCompletedStatisticsView(TechnicianTicketMixin, APIView):
+    def get(self, request):
+        now = timezone.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        resolutions = TicketResolution.objects.filter(resolved_by=request.user)
+        this_month = resolutions.filter(resolved_at__gte=month_start)
+
+        assignment_started_at = TicketAssignment.objects.filter(
+            ticket_id=OuterRef("ticket_id"),
+            technician=request.user,
+            assigned_at__lte=OuterRef("resolved_at"),
+        ).order_by("-assigned_at", "-id").values("assigned_at")[:1]
+        timed_resolutions = resolutions.annotate(
+            assignment_started_at=Subquery(
+                assignment_started_at,
+                output_field=DateTimeField(),
+            )
+        ).filter(assignment_started_at__isnull=False).annotate(
+            resolution_duration=ExpressionWrapper(
+                F("resolved_at") - F("assignment_started_at"),
+                output_field=DurationField(),
+            )
+        )
+        average_duration = timed_resolutions.aggregate(
+            average=Avg("resolution_duration")
+        )["average"]
+
+        return Response(
+            {
+                "resolved_this_month_attempts": this_month.count(),
+                "resolved_this_month_tickets": this_month.values("ticket_id").distinct().count(),
+                "closed_after_my_resolution": resolutions.filter(
+                    closed_at__isnull=False
+                ).values("ticket_id").distinct().count(),
+                "reopened_after_my_resolution": resolutions.filter(
+                    reopened_at__isnull=False
+                ).count(),
+                "average_resolution_seconds": (
+                    average_duration.total_seconds() if average_duration else None
+                ),
+                "definitions": {
+                    "resolved_this_month": "Resolution attempts recorded during the current calendar month.",
+                    "closed": "Distinct tickets closed after one of your resolution attempts.",
+                    "average": "Average time from your most recent assignment to each resolution.",
+                    "reopened": "Your resolution attempts later rejected or reopened by the requester or an administrator.",
+                },
+            }
         )

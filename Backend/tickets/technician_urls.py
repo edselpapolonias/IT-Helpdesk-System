@@ -7,6 +7,7 @@ from .technician_views import (
     TechnicianTicketHistoryView,
     TechnicianTicketListView,
     TechnicianTicketResolutionsView,
+    TechnicianTicketResolveView,
     TechnicianTicketStartWorkView,
     TechnicianTicketStatisticsView,
     TechnicianTicketTroubleshootingView,
@@ -30,5 +31,6 @@ urlpatterns = [
         name="technician-ticket-troubleshooting",
     ),
     path("<int:pk>/resolutions/", TechnicianTicketResolutionsView.as_view(), name="technician-ticket-resolutions"),
+    path("<int:pk>/resolve/", TechnicianTicketResolveView.as_view(), name="technician-ticket-resolve"),
     path("<int:pk>/start-work/", TechnicianTicketStartWorkView.as_view(), name="technician-ticket-start-work"),
 ]

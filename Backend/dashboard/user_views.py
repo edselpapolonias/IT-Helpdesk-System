@@ -426,7 +426,10 @@ class UserTicketResolutionConfirmView(RegularUserDashboardView):
             raise ValidationError(
                 {"status": "A reopening request is already pending review."}
             )
-        if not ticket.resolutions.exists():
+        resolution = ticket.resolutions.select_for_update().order_by(
+            "-resolved_at", "-id"
+        ).first()
+        if resolution is None:
             raise ValidationError(
                 {"status": "This ticket does not have a recorded resolution."}
             )
@@ -442,6 +445,8 @@ class UserTicketResolutionConfirmView(RegularUserDashboardView):
                 "updated_at",
             )
         )
+        resolution.closed_at = confirmed_at
+        resolution.save(update_fields=("closed_at",))
         TicketStatusHistory.objects.create(
             ticket=ticket,
             previous_status=Ticket.Status.RESOLVED,
@@ -478,11 +483,15 @@ class UserTicketReopenRequestView(RegularUserDashboardView):
             raise ValidationError(
                 {"status": "A reopening request is already pending review."}
             )
-        if not ticket.resolutions.exists():
+        resolution = ticket.resolutions.select_for_update().order_by(
+            "-resolved_at", "-id"
+        ).first()
+        if resolution is None:
             raise ValidationError(
                 {"status": "This ticket does not have a recorded resolution."}
             )
-        ticket.reopen_requested_at = timezone.now()
+        reopened_at = timezone.now()
+        ticket.reopen_requested_at = reopened_at
         ticket.reopen_reason = serializer.validated_data["reason"]
         ticket.status = Ticket.Status.REOPENED
         ticket.save(
@@ -493,6 +502,9 @@ class UserTicketReopenRequestView(RegularUserDashboardView):
                 "updated_at",
             )
         )
+        resolution.reopened_at = reopened_at
+        resolution.reopen_reason = serializer.validated_data["reason"]
+        resolution.save(update_fields=("reopened_at", "reopen_reason"))
         TicketStatusHistory.objects.create(
             ticket=ticket,
             previous_status=Ticket.Status.RESOLVED,
