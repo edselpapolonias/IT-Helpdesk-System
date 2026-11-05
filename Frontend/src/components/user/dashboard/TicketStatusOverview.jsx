@@ -1,7 +1,7 @@
 import { BarChart3 } from 'lucide-react'
 import { statusLabels } from '../../admin/tickets/constants'
 
-const tones = { OPEN: 'bg-slate-400', ASSIGNED: 'bg-violet-500', IN_PROGRESS: 'bg-blue-500', RESOLVED: 'bg-emerald-600', CLOSED: 'bg-zinc-500' }
+const tones = { OPEN: 'bg-slate-400', ASSIGNED: 'bg-violet-500', IN_PROGRESS: 'bg-blue-500', RESOLVED: 'bg-emerald-600', REOPENED: 'bg-amber-500', CLOSED: 'bg-zinc-500' }
 
 export default function TicketStatusOverview({ state, onRetry }) {
   const distribution = state.data?.status_distribution || []

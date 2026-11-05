@@ -153,10 +153,35 @@ class TroubleshootingLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TroubleshootingLog
-        fields = ("id", "technician", "action_taken", "notes", "created_at")
+        fields = (
+            "id",
+            "technician",
+            "action_taken",
+            "notes",
+            "is_requester_visible",
+            "public_notes",
+            "created_at",
+        )
 
     def get_technician(self, obj):
         return {"id": obj.technician_id, "name": display_name(obj.technician)}
+
+
+class TroubleshootingVisibilitySerializer(serializers.Serializer):
+    is_requester_visible = serializers.BooleanField()
+    public_notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=5000,
+        trim_whitespace=True,
+    )
+
+    def validate(self, attrs):
+        if attrs["is_requester_visible"] and not attrs.get("public_notes", "").strip():
+            raise serializers.ValidationError(
+                {"public_notes": "Requester-visible notes are required when sharing an update."}
+            )
+        return attrs
 
 
 class TicketResolutionSerializer(serializers.ModelSerializer):
@@ -180,6 +205,7 @@ class TicketAttachmentSerializer(serializers.ModelSerializer):
             "id",
             "original_filename",
             "file_size",
+            "is_requester_visible",
             "uploaded_by",
             "uploaded_at",
             "download_url",
@@ -190,3 +216,7 @@ class TicketAttachmentSerializer(serializers.ModelSerializer):
 
     def get_download_url(self, obj):
         return f"/api/admin/tickets/{obj.ticket_id}/attachments/{obj.id}/download/"
+
+
+class TicketAttachmentVisibilitySerializer(serializers.Serializer):
+    is_requester_visible = serializers.BooleanField()

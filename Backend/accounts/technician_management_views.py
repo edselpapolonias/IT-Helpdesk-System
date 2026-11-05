@@ -37,7 +37,11 @@ from .technician_management_serializers import (
 from .user_management_views import development_setup_link
 
 
-ACTIVE_TICKET_STATUSES = (Ticket.Status.ASSIGNED, Ticket.Status.IN_PROGRESS)
+ACTIVE_TICKET_STATUSES = (
+    Ticket.Status.ASSIGNED,
+    Ticket.Status.IN_PROGRESS,
+    Ticket.Status.REOPENED,
+)
 REPORTING_PERIODS = {7, 30, 90}
 WORKLOAD_RULES = {
     "none": (0, 0),

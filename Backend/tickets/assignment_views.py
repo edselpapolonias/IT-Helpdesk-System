@@ -39,11 +39,16 @@ from .assignment_serializers import (
 from .models import Ticket, TicketAssignment, TicketStatusHistory
 
 
-ACTIVE_STATUSES = (Ticket.Status.ASSIGNED, Ticket.Status.IN_PROGRESS)
+ACTIVE_STATUSES = (
+    Ticket.Status.ASSIGNED,
+    Ticket.Status.IN_PROGRESS,
+    Ticket.Status.REOPENED,
+)
 UNRESOLVED_STATUSES = (
     Ticket.Status.OPEN,
     Ticket.Status.ASSIGNED,
     Ticket.Status.IN_PROGRESS,
+    Ticket.Status.REOPENED,
 )
 CATEGORY_SPECIALIZATIONS = {
     "hardware": User.TechnicianSpecialization.HARDWARE,
@@ -374,9 +379,16 @@ class AdminAssignmentListCreateView(AdminAssignmentMixin, APIView):
                     is_current=True,
                 ).exists():
                     raise AssignmentConflict("This ticket already has a current assignment.")
-                if ticket.status != Ticket.Status.OPEN:
+                if ticket.status not in (
+                    Ticket.Status.OPEN,
+                    Ticket.Status.REOPENED,
+                ):
                     raise ValidationError(
-                        {"ticket_id": "Only open, unassigned tickets can be assigned."}
+                        {
+                            "ticket_id": (
+                                "Only open or reopened unassigned tickets can be assigned."
+                            )
+                        }
                     )
                 technician = validate_technician(
                     serializer.validated_data["technician_id"]

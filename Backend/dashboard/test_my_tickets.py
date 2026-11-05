@@ -220,6 +220,7 @@ class MyTicketsAPITests(APITestCase):
 
         self.assertEqual(short.status_code, 400)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], Ticket.Status.REOPENED)
         self.assertEqual(response.data["resolution_response"], "REOPEN_REQUESTED")
         self.assertFalse(response.data["needs_confirmation"])
         self.assertEqual(duplicate.status_code, 400)

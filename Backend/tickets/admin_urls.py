@@ -2,6 +2,7 @@ from django.urls import path
 
 from .admin_views import (
     AdminTicketAttachmentDownloadView,
+    AdminTicketAttachmentVisibilityView,
     AdminTicketAttachmentsView,
     AdminTicketDetailView,
     AdminTicketHistoryView,
@@ -11,6 +12,7 @@ from .admin_views import (
     AdminTicketStatisticsView,
     AdminTicketStatusView,
     AdminTicketTroubleshootingView,
+    AdminTicketTroubleshootingVisibilityView,
 )
 
 
@@ -22,7 +24,9 @@ urlpatterns = [
     path("<int:pk>/status/", AdminTicketStatusView.as_view(), name="admin-ticket-status"),
     path("<int:pk>/history/", AdminTicketHistoryView.as_view(), name="admin-ticket-history"),
     path("<int:pk>/troubleshooting/", AdminTicketTroubleshootingView.as_view(), name="admin-ticket-troubleshooting"),
+    path("<int:pk>/troubleshooting/<int:log_id>/visibility/", AdminTicketTroubleshootingVisibilityView.as_view(), name="admin-ticket-troubleshooting-visibility"),
     path("<int:pk>/resolutions/", AdminTicketResolutionsView.as_view(), name="admin-ticket-resolutions"),
     path("<int:pk>/attachments/", AdminTicketAttachmentsView.as_view(), name="admin-ticket-attachments"),
     path("<int:pk>/attachments/<int:attachment_id>/download/", AdminTicketAttachmentDownloadView.as_view(), name="admin-ticket-attachment-download"),
+    path("<int:pk>/attachments/<int:attachment_id>/visibility/", AdminTicketAttachmentVisibilityView.as_view(), name="admin-ticket-attachment-visibility"),
 ]

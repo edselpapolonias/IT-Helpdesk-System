@@ -47,6 +47,7 @@ class Ticket(models.Model):
         ASSIGNED = "ASSIGNED", "Assigned"
         IN_PROGRESS = "IN_PROGRESS", "In Progress"
         RESOLVED = "RESOLVED", "Resolved"
+        REOPENED = "REOPENED", "Reopened"
         CLOSED = "CLOSED", "Closed"
 
     class ReportedUrgency(models.TextChoices):
@@ -58,7 +59,8 @@ class Ticket(models.Model):
         Status.OPEN: {Status.ASSIGNED},
         Status.ASSIGNED: {Status.IN_PROGRESS},
         Status.IN_PROGRESS: {Status.RESOLVED},
-        Status.RESOLVED: {Status.CLOSED},
+        Status.RESOLVED: {Status.REOPENED, Status.CLOSED},
+        Status.REOPENED: {Status.ASSIGNED, Status.IN_PROGRESS},
         Status.CLOSED: set(),
     }
 
@@ -268,6 +270,8 @@ class TroubleshootingLog(models.Model):
     )
     action_taken = models.CharField(max_length=220)
     notes = models.TextField(blank=True, default="")
+    is_requester_visible = models.BooleanField(default=False)
+    public_notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -278,6 +282,14 @@ class TroubleshootingLog(models.Model):
         user_model = self.technician.__class__
         if self.technician.role != user_model.Role.TECHNICIAN:
             raise ValidationError({"technician": "User must be an IT technician."})
+        if self.is_requester_visible and not self.public_notes.strip():
+            raise ValidationError(
+                {
+                    "public_notes": (
+                        "Requester-visible notes are required when sharing an update."
+                    )
+                }
+            )
 
 
 class TicketResolution(models.Model):
@@ -330,6 +342,7 @@ class TicketAttachment(models.Model):
     )
     original_filename = models.CharField(max_length=255)
     file_size = models.PositiveBigIntegerField()
+    is_requester_visible = models.BooleanField(default=False)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

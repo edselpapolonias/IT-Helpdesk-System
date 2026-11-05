@@ -2,7 +2,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.db import IntegrityError, transaction
-from django.db.models import Case, Count, F, IntegerField, Q, When
+from django.db.models import Case, Count, F, IntegerField, Prefetch, Q, When
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -20,6 +20,7 @@ from tickets.models import (
     TicketAssignment,
     TicketResolution,
     TicketStatusHistory,
+    TroubleshootingLog,
 )
 
 from .user_serializers import (
@@ -50,12 +51,39 @@ def optional_date(raw_value, field_name):
     return parsed
 
 
-def user_ticket_detail(ticket_id, user):
+def user_ticket_queryset(user):
     return (
-        Ticket.objects.select_related("category", "assigned_technician")
-        .prefetch_related("attachments", "resolutions__resolved_by")
-        .get(pk=ticket_id, requester=user)
+        Ticket.objects.filter(requester=user)
+        .select_related("category", "assigned_technician")
+        .prefetch_related(
+            Prefetch(
+                "attachments",
+                queryset=TicketAttachment.objects.filter(
+                    Q(is_requester_visible=True) | Q(uploaded_by=user)
+                ),
+                to_attr="requester_attachments",
+            ),
+            Prefetch(
+                "troubleshooting_logs",
+                queryset=TroubleshootingLog.objects.filter(
+                    is_requester_visible=True
+                ).select_related("technician"),
+                to_attr="requester_updates",
+            ),
+            Prefetch(
+                "assignment_history",
+                queryset=TicketAssignment.objects.filter(
+                    is_current=True
+                ).select_related("technician"),
+                to_attr="current_assignments",
+            ),
+            "resolutions__resolved_by",
+        )
     )
+
+
+def user_ticket_detail(ticket_id, user):
+    return user_ticket_queryset(user).get(pk=ticket_id)
 
 
 class UserDashboardSummaryView(RegularUserDashboardView):
@@ -67,6 +95,7 @@ class UserDashboardSummaryView(RegularUserDashboardView):
             assigned=Count("id", filter=Q(status=Ticket.Status.ASSIGNED)),
             in_progress=Count("id", filter=Q(status=Ticket.Status.IN_PROGRESS)),
             resolved=Count("id", filter=Q(status=Ticket.Status.RESOLVED)),
+            reopened=Count("id", filter=Q(status=Ticket.Status.REOPENED)),
             closed=Count("id", filter=Q(status=Ticket.Status.CLOSED)),
         )
         counts["status_distribution"] = [
@@ -76,6 +105,7 @@ class UserDashboardSummaryView(RegularUserDashboardView):
                 (Ticket.Status.ASSIGNED, "assigned"),
                 (Ticket.Status.IN_PROGRESS, "in_progress"),
                 (Ticket.Status.RESOLVED, "resolved"),
+                (Ticket.Status.REOPENED, "reopened"),
                 (Ticket.Status.CLOSED, "closed"),
             )
         ]
@@ -185,13 +215,7 @@ class UserRecentActivityView(RegularUserDashboardView):
 
 class UserTicketDetailView(RegularUserDashboardView):
     def get(self, request, pk):
-        ticket = get_object_or_404(
-            Ticket.objects.select_related(
-                "category", "assigned_technician"
-            ).prefetch_related("attachments", "resolutions__resolved_by"),
-            pk=pk,
-            requester=request.user,
-        )
+        ticket = get_object_or_404(user_ticket_queryset(request.user), pk=pk)
         return Response(UserTicketDetailSerializer(ticket).data)
 
 
@@ -311,11 +335,7 @@ class UserTicketCreateView(RegularUserDashboardView):
                 raise ValidationError(
                     {"submission_key": "This submission key is already in use."}
                 )
-            existing = (
-                Ticket.objects.select_related("category", "assigned_technician")
-                .prefetch_related("attachments", "resolutions__resolved_by")
-                .get(pk=existing.pk)
-            )
+            existing = user_ticket_detail(existing.pk, request.user)
             data = UserTicketDetailSerializer(existing).data
             data["duplicate_submission"] = True
             return Response(data)
@@ -348,6 +368,7 @@ class UserTicketCreateView(RegularUserDashboardView):
                         file=upload,
                         original_filename=Path(upload.name).name,
                         file_size=upload.size,
+                        is_requester_visible=True,
                     )
                     attachment.full_clean()
                     saved_attachments.append(attachment)
@@ -361,11 +382,7 @@ class UserTicketCreateView(RegularUserDashboardView):
             ).first()
             if existing is None:
                 raise
-            existing = (
-                Ticket.objects.select_related("category", "assigned_technician")
-                .prefetch_related("attachments", "resolutions__resolved_by")
-                .get(pk=existing.pk)
-            )
+            existing = user_ticket_detail(existing.pk, request.user)
             data = UserTicketDetailSerializer(existing).data
             data["duplicate_submission"] = True
             return Response(data)
@@ -374,11 +391,7 @@ class UserTicketCreateView(RegularUserDashboardView):
                 attachment.file.delete(save=False)
             raise
 
-        ticket = (
-            Ticket.objects.select_related("category", "assigned_technician")
-            .prefetch_related("attachments", "resolutions__resolved_by")
-            .get(pk=ticket.pk)
-        )
+        ticket = user_ticket_detail(ticket.pk, request.user)
         data = UserTicketDetailSerializer(ticket).data
         data["duplicate_submission"] = False
         return Response(data, status=201)
@@ -464,8 +477,21 @@ class UserTicketReopenRequestView(RegularUserDashboardView):
             )
         ticket.reopen_requested_at = timezone.now()
         ticket.reopen_reason = serializer.validated_data["reason"]
+        ticket.status = Ticket.Status.REOPENED
         ticket.save(
-            update_fields=("reopen_requested_at", "reopen_reason", "updated_at")
+            update_fields=(
+                "reopen_requested_at",
+                "reopen_reason",
+                "status",
+                "updated_at",
+            )
+        )
+        TicketStatusHistory.objects.create(
+            ticket=ticket,
+            previous_status=Ticket.Status.RESOLVED,
+            new_status=Ticket.Status.REOPENED,
+            changed_by=request.user,
+            reason=serializer.validated_data["reason"],
         )
         return Response(
             UserTicketDetailSerializer(
@@ -474,16 +500,152 @@ class UserTicketReopenRequestView(RegularUserDashboardView):
         )
 
 
+class UserTicketActivityView(RegularUserDashboardView):
+    def get(self, request, pk):
+        ticket = get_object_or_404(
+            Ticket.objects.filter(requester=request.user),
+            pk=pk,
+        )
+        events = [
+            {
+                "type": "submitted",
+                "title": "Ticket Submitted",
+                "description": "Your support request was received by the helpdesk.",
+                "actor": request.user.get_full_name() or request.user.username,
+                "timestamp": ticket.created_at,
+            }
+        ]
+
+        assignments = ticket.assignment_history.select_related(
+            "technician"
+        ).order_by("assigned_at", "id")
+        for index, assignment in enumerate(assignments):
+            technician_name = (
+                assignment.technician.get_full_name()
+                or assignment.technician.username
+            )
+            events.append(
+                {
+                    "type": "assignment",
+                    "title": (
+                        "Technician Reassigned"
+                        if index > 0
+                        else "Technician Assigned"
+                    ),
+                    "description": f"{technician_name} was assigned to your request.",
+                    "actor": technician_name,
+                    "timestamp": assignment.assigned_at or ticket.created_at,
+                }
+            )
+
+        status_titles = {
+            Ticket.Status.IN_PROGRESS: "Work Started",
+            Ticket.Status.RESOLVED: "Ticket Resolved",
+            Ticket.Status.REOPENED: "Ticket Reopened",
+            Ticket.Status.CLOSED: "Ticket Closed",
+        }
+        status_descriptions = {
+            Ticket.Status.IN_PROGRESS: "The technician started working on the issue.",
+            Ticket.Status.RESOLVED: "A resolution was recorded for your review.",
+            Ticket.Status.REOPENED: "The issue was returned to the support queue.",
+            Ticket.Status.CLOSED: "The support request was closed.",
+        }
+        history = ticket.status_history.select_related("changed_by").order_by(
+            "changed_at", "id"
+        )
+        for change in history:
+            if change.previous_status == change.new_status:
+                continue
+            if change.new_status == Ticket.Status.ASSIGNED and assignments.exists():
+                continue
+            events.append(
+                {
+                    "type": "status",
+                    "title": status_titles.get(
+                        change.new_status,
+                        f"Status Changed to {change.get_new_status_display()}",
+                    ),
+                    "description": status_descriptions.get(
+                        change.new_status,
+                        "The ticket status was updated.",
+                    ),
+                    "actor": (
+                        change.changed_by.get_full_name()
+                        or change.changed_by.username
+                    ),
+                    "timestamp": change.changed_at,
+                }
+            )
+
+        updates = ticket.troubleshooting_logs.filter(
+            is_requester_visible=True
+        ).select_related("technician")
+        for update in updates:
+            events.append(
+                {
+                    "type": "troubleshooting",
+                    "title": "Troubleshooting Updated",
+                    "description": update.action_taken,
+                    "actor": (
+                        update.technician.get_full_name()
+                        or update.technician.username
+                    ),
+                    "timestamp": update.created_at,
+                }
+            )
+
+        resolutions = ticket.resolutions.select_related("resolved_by")
+        for resolution in resolutions:
+            events.append(
+                {
+                    "type": "resolution",
+                    "title": "Resolution Provided",
+                    "description": resolution.resolution_summary,
+                    "actor": (
+                        resolution.resolved_by.get_full_name()
+                        or resolution.resolved_by.username
+                    ),
+                    "timestamp": resolution.resolved_at,
+                }
+            )
+
+        events.sort(key=lambda event: event["timestamp"])
+        for index, event in enumerate(events):
+            event["is_current"] = index == len(events) - 1
+        return Response({"results": events})
+
+
+class UserTicketResolutionView(RegularUserDashboardView):
+    def get(self, request, pk):
+        ticket = get_object_or_404(user_ticket_queryset(request.user), pk=pk)
+        data = UserTicketDetailSerializer(ticket).data
+        return Response(
+            {
+                "resolution": data["resolution"],
+                "resolution_response": data["resolution_response"],
+                "needs_confirmation": data["needs_confirmation"],
+                "requester_confirmed_at": data["requester_confirmed_at"],
+                "reopen_requested_at": data["reopen_requested_at"],
+                "reopen_reason": data["reopen_reason"],
+            }
+        )
+
+
 class UserTicketAttachmentDownloadView(RegularUserDashboardView):
     def get(self, request, pk, attachment_id):
         attachment = get_object_or_404(
-            TicketAttachment.objects.select_related("ticket"),
+            TicketAttachment.objects.select_related("ticket").filter(
+                Q(is_requester_visible=True) | Q(uploaded_by=request.user)
+            ),
             pk=attachment_id,
             ticket_id=pk,
             ticket__requester=request.user,
         )
+        preview_extensions = {".jpg", ".jpeg", ".png", ".pdf"}
+        wants_preview = request.query_params.get("preview") == "1"
+        allow_preview = Path(attachment.original_filename).suffix.lower() in preview_extensions
         return FileResponse(
             attachment.file.open("rb"),
-            as_attachment=True,
+            as_attachment=not (wants_preview and allow_preview),
             filename=Path(attachment.original_filename).name,
         )

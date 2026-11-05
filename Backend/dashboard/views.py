@@ -20,6 +20,7 @@ ACTIONABLE_STATUSES = (
     Ticket.Status.OPEN,
     Ticket.Status.ASSIGNED,
     Ticket.Status.IN_PROGRESS,
+    Ticket.Status.REOPENED,
 )
 
 
@@ -168,6 +169,7 @@ class TechnicianWorkloadView(AdminDashboardAPIView):
                         assigned_tickets__status__in=(
                             Ticket.Status.ASSIGNED,
                             Ticket.Status.IN_PROGRESS,
+                            Ticket.Status.REOPENED,
                         )
                     ),
                     distinct=True,

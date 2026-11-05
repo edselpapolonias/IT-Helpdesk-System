@@ -166,6 +166,7 @@ class UserTicketSubmissionAPITests(APITestCase):
         self.assertEqual(len(response.data["attachments"]), 2)
         attachments = TicketAttachment.objects.filter(ticket_id=response.data["id"])
         self.assertEqual(attachments.count(), 2)
+        self.assertFalse(attachments.filter(is_requester_visible=False).exists())
         self.assertSetEqual(
             set(attachments.values_list("original_filename", flat=True)),
             {"wifi-error.png", "diagnostic.pdf"},

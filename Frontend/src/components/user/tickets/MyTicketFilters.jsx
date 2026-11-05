@@ -20,7 +20,7 @@ export default function MyTicketFilters({ filters, categories, onChange, onClear
           />
         </label>
         <select value={filters.status} onChange={(event) => onChange('status', event.target.value)} className={selectClass} aria-label="Status">
-          <option value="all">All statuses</option><option value="OPEN">Open</option><option value="ASSIGNED">Assigned</option><option value="IN_PROGRESS">In Progress</option><option value="RESOLVED">Resolved</option><option value="CLOSED">Closed</option>
+          <option value="all">All statuses</option><option value="OPEN">Open</option><option value="ASSIGNED">Assigned</option><option value="IN_PROGRESS">In Progress</option><option value="RESOLVED">Resolved</option><option value="REOPENED">Reopened</option><option value="CLOSED">Closed</option>
         </select>
         <select value={filters.priority} onChange={(event) => onChange('priority', event.target.value)} className={selectClass} aria-label="Priority">
           <option value="all">All priorities</option><option value="CRITICAL">Critical</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option>

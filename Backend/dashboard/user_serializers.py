@@ -100,7 +100,9 @@ class UserTicketListSerializer(serializers.ModelSerializer):
 class UserTicketDetailSerializer(serializers.ModelSerializer):
     category = serializers.SerializerMethodField()
     assigned_technician = serializers.SerializerMethodField()
+    assignment = serializers.SerializerMethodField()
     attachments = serializers.SerializerMethodField()
+    technician_updates = serializers.SerializerMethodField()
     resolution = serializers.SerializerMethodField()
     needs_confirmation = serializers.SerializerMethodField()
     resolution_response = serializers.SerializerMethodField()
@@ -118,7 +120,9 @@ class UserTicketDetailSerializer(serializers.ModelSerializer):
             "priority",
             "status",
             "assigned_technician",
+            "assignment",
             "attachments",
+            "technician_updates",
             "resolution",
             "needs_confirmation",
             "resolution_response",
@@ -150,19 +154,57 @@ class UserTicketDetailSerializer(serializers.ModelSerializer):
             "specialization": technician.get_technician_specialization_display(),
         }
 
+    def get_assignment(self, obj):
+        assignments = getattr(obj, "current_assignments", [])
+        if not assignments:
+            return {
+                "status": "UNASSIGNED",
+                "assigned_at": None,
+            }
+        assignment = assignments[0]
+        return {
+            "status": "ASSIGNED",
+            "assigned_at": assignment.assigned_at,
+        }
+
     def get_attachments(self, obj):
+        attachments = getattr(obj, "requester_attachments", [])
         return [
             {
                 "id": attachment.id,
                 "original_filename": attachment.original_filename,
                 "file_size": attachment.file_size,
+                "file_type": (
+                    Path(attachment.original_filename).suffix.lstrip(".").upper()
+                    or "FILE"
+                ),
+                "preview_supported": (
+                    Path(attachment.original_filename).suffix.lower()
+                    in {".jpg", ".jpeg", ".png", ".pdf"}
+                ),
                 "uploaded_at": attachment.uploaded_at,
                 "download_url": (
                     f"/api/user/tickets/{obj.id}/attachments/"
                     f"{attachment.id}/download/"
                 ),
             }
-            for attachment in obj.attachments.all()
+            for attachment in attachments
+        ]
+
+    def get_technician_updates(self, obj):
+        updates = getattr(obj, "requester_updates", [])
+        return [
+            {
+                "id": update.id,
+                "action_summary": update.action_taken,
+                "public_notes": update.public_notes,
+                "technician": (
+                    update.technician.get_full_name()
+                    or update.technician.username
+                ),
+                "created_at": update.created_at,
+            }
+            for update in updates
         ]
 
     def get_resolution(self, obj):

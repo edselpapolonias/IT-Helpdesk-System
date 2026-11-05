@@ -29,11 +29,13 @@ from .models import (
 from .serializers import (
     PriorityUpdateSerializer,
     StatusTransitionSerializer,
+    TicketAttachmentVisibilitySerializer,
     TicketAttachmentSerializer,
     TicketCategorySerializer,
     TicketDetailSerializer,
     TicketListSerializer,
     TicketResolutionSerializer,
+    TroubleshootingVisibilitySerializer,
     TroubleshootingLogSerializer,
 )
 
@@ -42,6 +44,7 @@ ACTIONABLE_STATUSES = (
     Ticket.Status.OPEN,
     Ticket.Status.ASSIGNED,
     Ticket.Status.IN_PROGRESS,
+    Ticket.Status.REOPENED,
 )
 
 
@@ -255,10 +258,21 @@ class AdminTicketStatusView(AdminTicketMixin, APIView):
                     {"status": "A technician must be assigned first."}
                 )
         if new_status == Ticket.Status.RESOLVED:
-            resolution = ticket.resolutions.order_by("-resolved_at").first()
+            resolutions = ticket.resolutions.order_by("-resolved_at")
+            if ticket.reopen_requested_at:
+                resolutions = resolutions.filter(
+                    resolved_at__gt=ticket.reopen_requested_at
+                )
+            resolution = resolutions.first()
             if resolution is None:
                 raise ValidationError(
-                    {"status": "A resolution record is required before resolving."}
+                    {
+                        "status": (
+                            "A new resolution record is required before resolving."
+                            if ticket.reopen_requested_at
+                            else "A resolution record is required before resolving."
+                        )
+                    }
                 )
             ticket.resolved_at = resolution.resolved_at
             ticket.requester_confirmed_at = None
@@ -382,6 +396,27 @@ class AdminTicketTroubleshootingView(AdminTicketMixin, APIView):
         )
 
 
+class AdminTicketTroubleshootingVisibilityView(AdminTicketMixin, APIView):
+    @transaction.atomic
+    def patch(self, request, pk, log_id):
+        serializer = TroubleshootingVisibilitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        log = get_object_or_404(
+            TroubleshootingLog.objects.select_for_update().select_related(
+                "technician"
+            ),
+            pk=log_id,
+            ticket_id=pk,
+        )
+        log.is_requester_visible = serializer.validated_data[
+            "is_requester_visible"
+        ]
+        if "public_notes" in serializer.validated_data:
+            log.public_notes = serializer.validated_data["public_notes"]
+        log.save(update_fields=("is_requester_visible", "public_notes"))
+        return Response(TroubleshootingLogSerializer(log).data)
+
+
 class AdminTicketResolutionsView(AdminTicketMixin, APIView):
     def get(self, request, pk):
         ticket = self.get_object()
@@ -398,6 +433,25 @@ class AdminTicketAttachmentsView(AdminTicketMixin, APIView):
         return Response(
             {"results": TicketAttachmentSerializer(attachments, many=True).data}
         )
+
+
+class AdminTicketAttachmentVisibilityView(AdminTicketMixin, APIView):
+    @transaction.atomic
+    def patch(self, request, pk, attachment_id):
+        serializer = TicketAttachmentVisibilitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        attachment = get_object_or_404(
+            TicketAttachment.objects.select_for_update().select_related(
+                "uploaded_by"
+            ),
+            pk=attachment_id,
+            ticket_id=pk,
+        )
+        attachment.is_requester_visible = serializer.validated_data[
+            "is_requester_visible"
+        ]
+        attachment.save(update_fields=("is_requester_visible",))
+        return Response(TicketAttachmentSerializer(attachment).data)
 
 
 class AdminTicketAttachmentDownloadView(AdminTicketMixin, APIView):

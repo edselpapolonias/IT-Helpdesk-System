@@ -42,6 +42,13 @@ export const ticketService = {
     const response = await api.get(`/admin/tickets/${id}/troubleshooting/`, config)
     return response.data
   },
+  async updateTroubleshootingVisibility(ticketId, logId, data) {
+    const response = await api.patch(
+      `/admin/tickets/${ticketId}/troubleshooting/${logId}/visibility/`,
+      data,
+    )
+    return response.data
+  },
   async resolutions(id, config = {}) {
     const response = await api.get(`/admin/tickets/${id}/resolutions/`, config)
     return response.data
@@ -54,6 +61,13 @@ export const ticketService = {
     const response = await api.get(
       `/admin/tickets/${ticketId}/attachments/${attachmentId}/download/`,
       { responseType: 'blob' },
+    )
+    return response.data
+  },
+  async updateAttachmentVisibility(ticketId, attachmentId, isRequesterVisible) {
+    const response = await api.patch(
+      `/admin/tickets/${ticketId}/attachments/${attachmentId}/visibility/`,
+      { is_requester_visible: isRequesterVisible },
     )
     return response.data
   },
