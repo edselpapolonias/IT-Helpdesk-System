@@ -1,8 +1,11 @@
+import mimetypes
 from datetime import timedelta
+from pathlib import Path
 
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.db.models.functions import Concat
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -15,10 +18,20 @@ from rest_framework.views import APIView
 
 from accounts.permissions import IsITTechnician
 
-from .models import Ticket, TicketAssignment, TicketStatusHistory
+from .models import (
+    Ticket,
+    TicketAssignment,
+    TicketAttachment,
+    TicketStatusHistory,
+    TroubleshootingLog,
+)
 from .technician_serializers import (
+    TechnicianAttachmentSerializer,
+    TechnicianResolutionSerializer,
     TechnicianTicketDetailSerializer,
     TechnicianTicketListSerializer,
+    TechnicianTroubleshootingCreateSerializer,
+    TechnicianTroubleshootingSerializer,
 )
 
 
@@ -28,6 +41,8 @@ ACTIVE_STATUSES = (
     Ticket.Status.REOPENED,
 )
 STARTABLE_STATUSES = (Ticket.Status.ASSIGNED, Ticket.Status.REOPENED)
+COMPLETED_STATUSES = (Ticket.Status.RESOLVED, Ticket.Status.CLOSED)
+PREVIEW_FILE_TYPES = {"JPG", "JPEG", "PNG", "PDF"}
 
 
 class TechnicianTicketConflict(APIException):
@@ -57,6 +72,63 @@ def technician_assignments(technician):
         is_current=True,
         ticket__assigned_technician=technician,
     ).select_related("ticket", "ticket__category", "ticket__requester")
+
+
+def technician_ticket_access(technician, pk, *, require_current=False, lock=False):
+    ticket_queryset = Ticket.objects.select_related(
+        "category", "requester", "assigned_technician"
+    )
+    if lock:
+        ticket_queryset = ticket_queryset.select_for_update(of=("self",))
+    try:
+        ticket = ticket_queryset.get(pk=pk)
+    except Ticket.DoesNotExist as exc:
+        raise NotFound("Ticket not found.") from exc
+
+    assignment_queryset = TicketAssignment.objects.filter(
+        ticket=ticket,
+        technician=technician,
+    ).select_related("technician", "assigned_by")
+    if lock:
+        assignment_queryset = assignment_queryset.select_for_update(of=("self",))
+
+    current_assignment = assignment_queryset.filter(
+        is_current=True,
+        ticket__assigned_technician=technician,
+    ).first()
+    if current_assignment is not None and ticket.status in ACTIVE_STATUSES:
+        return ticket, current_assignment, "current"
+
+    has_assignment_history = assignment_queryset.exists()
+    if require_current:
+        if has_assignment_history:
+            raise TechnicianTicketConflict(
+                "This ticket is no longer an active assignment. Refresh your work queue."
+            )
+        raise NotFound("Ticket not found in your current assignments.")
+
+    has_resolution_history = ticket.resolutions.filter(resolved_by=technician).exists()
+    if ticket.status in COMPLETED_STATUSES and (
+        has_assignment_history or has_resolution_history
+    ):
+        assignment = assignment_queryset.order_by("-assigned_at", "-id").first()
+        return ticket, assignment, "historical"
+
+    raise NotFound("Ticket not found in your current or completed work.")
+
+
+def detail_serializer(ticket, assignment, access_mode):
+    return TechnicianTicketDetailSerializer(
+        ticket,
+        context={
+            "access_assignment": assignment,
+            "access_mode": access_mode,
+        },
+    )
+
+
+def display_name(user):
+    return user.get_full_name() or user.username
 
 
 class TechnicianTicketMixin:
@@ -181,8 +253,10 @@ class TechnicianTicketStatisticsView(TechnicianTicketMixin, APIView):
         )
 
 
-class TechnicianTicketDetailView(TechnicianTicketMixin, generics.RetrieveAPIView):
-    serializer_class = TechnicianTicketDetailSerializer
+class TechnicianTicketDetailView(TechnicianTicketMixin, APIView):
+    def get(self, request, pk):
+        ticket, assignment, access_mode = technician_ticket_access(request.user, pk)
+        return Response(detail_serializer(ticket, assignment, access_mode).data)
 
 
 class TechnicianTicketStartWorkView(TechnicianTicketMixin, APIView):
@@ -244,6 +318,210 @@ class TechnicianTicketStartWorkView(TechnicianTicketMixin, APIView):
         return Response(
             {
                 "detail": "Work started. The ticket is now In Progress.",
-                "ticket": TechnicianTicketDetailSerializer(refreshed).data,
+                "ticket": detail_serializer(
+                    refreshed.ticket,
+                    refreshed,
+                    "current",
+                ).data,
             }
+        )
+
+
+class TechnicianTicketHistoryView(TechnicianTicketMixin, APIView):
+    def get(self, request, pk):
+        ticket, _, _ = technician_ticket_access(request.user, pk)
+        events = [
+            {
+                "id": f"submitted-{ticket.id}",
+                "type": "submitted",
+                "title": "Ticket submitted",
+                "description": "Technical support request created.",
+                "actor": display_name(ticket.requester),
+                "timestamp": ticket.created_at,
+            }
+        ]
+
+        for item in ticket.priority_history.select_related("changed_by"):
+            description = (
+                f"{item.get_previous_priority_display()} to "
+                f"{item.get_new_priority_display()}"
+            )
+            if item.reason:
+                description = f"{description} - {item.reason}"
+            events.append(
+                {
+                    "id": f"priority-{item.id}",
+                    "type": "priority",
+                    "title": "Priority updated",
+                    "description": description,
+                    "actor": display_name(item.changed_by),
+                    "timestamp": item.changed_at,
+                }
+            )
+
+        for item in ticket.status_history.select_related("changed_by"):
+            if item.previous_status == item.new_status:
+                continue
+            title = f"Status changed to {item.get_new_status_display()}"
+            if item.new_status == Ticket.Status.IN_PROGRESS:
+                title = (
+                    "Work resumed"
+                    if item.previous_status == Ticket.Status.REOPENED
+                    else "Work started"
+                )
+            elif item.new_status == Ticket.Status.REOPENED:
+                title = "Ticket reopened"
+            elif item.new_status == Ticket.Status.RESOLVED:
+                title = "Ticket resolved"
+            elif item.new_status == Ticket.Status.CLOSED:
+                title = "Ticket closed"
+            events.append(
+                {
+                    "id": f"status-{item.id}",
+                    "type": "status",
+                    "title": title,
+                    "description": item.reason,
+                    "actor": display_name(item.changed_by),
+                    "timestamp": item.changed_at,
+                }
+            )
+
+        assignments = ticket.assignment_history.select_related(
+            "technician", "assigned_by"
+        ).order_by("assigned_at", "id")
+        for index, item in enumerate(assignments):
+            technician_name = display_name(item.technician)
+            description = ""
+            if item.technician_id == request.user.id:
+                description = (
+                    item.reassignment_reason
+                    if index > 0 and item.reassignment_reason
+                    else item.assignment_notes
+                )
+            events.append(
+                {
+                    "id": f"assignment-{item.id}",
+                    "type": "assignment",
+                    "title": (
+                        f"Ticket reassigned to {technician_name}"
+                        if index > 0
+                        else f"Ticket assigned to {technician_name}"
+                    ),
+                    "description": description,
+                    "actor": (
+                        display_name(item.assigned_by)
+                        if item.assigned_by_id
+                        else "System"
+                    ),
+                    "timestamp": item.assigned_at or ticket.created_at,
+                }
+            )
+
+        for item in ticket.troubleshooting_logs.select_related("technician"):
+            events.append(
+                {
+                    "id": f"troubleshooting-{item.id}",
+                    "type": "troubleshooting",
+                    "title": item.action_taken,
+                    "description": item.notes,
+                    "actor": display_name(item.technician),
+                    "timestamp": item.created_at,
+                }
+            )
+
+        for item in ticket.resolutions.select_related("resolved_by"):
+            events.append(
+                {
+                    "id": f"resolution-{item.id}",
+                    "type": "resolution",
+                    "title": "Resolution recorded",
+                    "description": item.resolution_summary,
+                    "actor": display_name(item.resolved_by),
+                    "timestamp": item.resolved_at,
+                }
+            )
+
+        return Response(
+            {"results": sorted(events, key=lambda event: event["timestamp"])}
+        )
+
+
+class TechnicianTicketAttachmentsView(TechnicianTicketMixin, APIView):
+    def get(self, request, pk):
+        ticket, _, _ = technician_ticket_access(request.user, pk)
+        attachments = ticket.attachments.select_related("uploaded_by")
+        return Response(
+            {"results": TechnicianAttachmentSerializer(attachments, many=True).data}
+        )
+
+
+class TechnicianTicketAttachmentDownloadView(TechnicianTicketMixin, APIView):
+    def get(self, request, pk, attachment_id):
+        technician_ticket_access(request.user, pk)
+        attachment = get_object_or_404(
+            TicketAttachment.objects.select_related("ticket"),
+            pk=attachment_id,
+            ticket_id=pk,
+        )
+        file_type = Path(attachment.original_filename).suffix.lstrip(".").upper()
+        preview_requested = request.query_params.get("preview") == "1"
+        if preview_requested and file_type not in PREVIEW_FILE_TYPES:
+            raise ValidationError(
+                {"preview": "Preview is available only for JPG, JPEG, PNG, and PDF files."}
+            )
+
+        safe_filename = Path(attachment.original_filename).name
+        content_type = mimetypes.guess_type(safe_filename)[0] or "application/octet-stream"
+        response = FileResponse(
+            attachment.file.open("rb"),
+            as_attachment=not preview_requested,
+            filename=safe_filename,
+            content_type=content_type,
+        )
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
+
+
+class TechnicianTicketTroubleshootingView(TechnicianTicketMixin, APIView):
+    def get(self, request, pk):
+        ticket, _, _ = technician_ticket_access(request.user, pk)
+        logs = ticket.troubleshooting_logs.select_related("technician")
+        return Response(
+            {"results": TechnicianTroubleshootingSerializer(logs, many=True).data}
+        )
+
+    @transaction.atomic
+    def post(self, request, pk):
+        ticket, _, _ = technician_ticket_access(
+            request.user,
+            pk,
+            require_current=True,
+            lock=True,
+        )
+        if ticket.status != Ticket.Status.IN_PROGRESS:
+            raise ValidationError(
+                {"status": "Troubleshooting updates require an In Progress ticket."}
+            )
+        serializer = TechnicianTroubleshootingCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        log = TroubleshootingLog.objects.create(
+            ticket=ticket,
+            technician=request.user,
+            is_requester_visible=False,
+            public_notes="",
+            **serializer.validated_data,
+        )
+        return Response(
+            TechnicianTroubleshootingSerializer(log).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class TechnicianTicketResolutionsView(TechnicianTicketMixin, APIView):
+    def get(self, request, pk):
+        ticket, _, _ = technician_ticket_access(request.user, pk)
+        resolutions = ticket.resolutions.select_related("resolved_by")
+        return Response(
+            {"results": TechnicianResolutionSerializer(resolutions, many=True).data}
         )

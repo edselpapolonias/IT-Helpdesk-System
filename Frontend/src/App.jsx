@@ -118,6 +118,7 @@ function App() {
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<TechnicianDashboard />} />
                 <Route path="tickets" element={<MyAssignedTickets />} />
+                <Route path="tickets/:ticketId/resolve" element={<TechnicianPlaceholderPage title="Resolve Ticket" description="The guided resolution form will be implemented in the technician resolution module. Return to the ticket details page to continue reviewing the active work." />} />
                 <Route path="tickets/:ticketId" element={<TechnicianTicketDetails />} />
                 <Route path="troubleshooting" element={<TechnicianPlaceholderPage title="Troubleshooting History" description="Your full troubleshooting history will be available in this workspace." />} />
                 <Route path="completed" element={<TechnicianPlaceholderPage title="Completed Tickets" description="Tickets completed through your resolutions will be listed here." />} />
