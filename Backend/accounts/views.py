@@ -41,9 +41,13 @@ class LoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if user.role not in (User.Role.ADMIN, User.Role.USER):
+        if user.role not in (
+            User.Role.ADMIN,
+            User.Role.USER,
+            User.Role.TECHNICIAN,
+        ):
             return Response(
-                {"detail": "The technician portal is not available yet."},
+                {"detail": "This account does not have an available portal."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

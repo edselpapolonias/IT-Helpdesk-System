@@ -46,7 +46,7 @@ export function AuthProvider({ children }) {
       .getCurrentUser()
       .then((currentUser) => {
         if (!active) return
-        if (!['ADMIN', 'USER'].includes(currentUser.role)) {
+        if (!['ADMIN', 'USER', 'TECHNICIAN'].includes(currentUser.role)) {
           throw new Error('This account does not have an available portal.')
         }
         syncUser(currentUser)

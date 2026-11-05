@@ -57,15 +57,16 @@ class AuthenticationTests(APITestCase):
         self.assertEqual(response.data["user"]["role"], User.Role.USER)
         self.assertTrue(Token.objects.filter(user=self.regular_user).exists())
 
-    def test_technician_login_is_rejected_until_portal_exists(self):
+    def test_technician_can_login_to_technician_portal(self):
         response = self.client.post(
             "/api/auth/login/",
             {"email": self.technician.email, "password": self.password},
             format="json",
         )
 
-        self.assertEqual(response.status_code, 403)
-        self.assertFalse(Token.objects.filter(user=self.technician).exists())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["user"]["role"], User.Role.TECHNICIAN)
+        self.assertTrue(Token.objects.filter(user=self.technician).exists())
 
     def test_invalid_credentials_return_generic_error(self):
         response = self.client.post(

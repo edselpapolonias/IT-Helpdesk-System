@@ -29,6 +29,8 @@ export default function LoginPage() {
       navigate('/it-admin/dashboard', { replace: true })
     } else if (user?.role === 'USER') {
       navigate('/user/dashboard', { replace: true })
+    } else if (user?.role === 'TECHNICIAN') {
+      navigate('/technician/dashboard', { replace: true })
     }
   }, [navigate, user])
 
@@ -46,10 +48,13 @@ export default function LoginPage() {
       const destination = location.state?.from?.pathname
       const roleHome = authenticatedUser.role === 'ADMIN'
         ? '/it-admin/dashboard'
-        : '/user/dashboard'
+        : authenticatedUser.role === 'TECHNICIAN'
+          ? '/technician/dashboard'
+          : '/user/dashboard'
       const destinationMatchesRole =
         (authenticatedUser.role === 'ADMIN' && destination?.startsWith('/it-admin')) ||
-        (authenticatedUser.role === 'USER' && destination?.startsWith('/user'))
+        (authenticatedUser.role === 'USER' && destination?.startsWith('/user')) ||
+        (authenticatedUser.role === 'TECHNICIAN' && destination?.startsWith('/technician'))
       navigate(
         destinationMatchesRole ? destination : roleHome,
         { replace: true },

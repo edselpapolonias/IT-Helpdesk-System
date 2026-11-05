@@ -4,7 +4,9 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 import AdminProtectedRoute from './components/auth/AdminProtectedRoute'
 import UserProtectedRoute from './components/auth/UserProtectedRoute'
+import TechnicianProtectedRoute from './components/auth/TechnicianProtectedRoute'
 import AdminLayout from './components/admin/layout/AdminLayout'
+import TechnicianLayout from './components/technician/layout/TechnicianLayout'
 import UserLayout from './components/user/layout/UserLayout'
 import { AuthProvider } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
@@ -24,6 +26,8 @@ const MyTickets = lazy(() => import('./pages/user/MyTickets'))
 const UserTicketDetailsPage = lazy(() => import('./pages/user/UserTicketDetailsPage'))
 const UserProfile = lazy(() => import('./pages/user/UserProfile'))
 const PasswordSetupPage = lazy(() => import('./pages/PasswordSetupPage'))
+const TechnicianDashboard = lazy(() => import('./pages/technician/TechnicianDashboard'))
+const TechnicianPlaceholderPage = lazy(() => import('./pages/technician/TechnicianPlaceholderPage'))
 
 function PageLoader() {
   return (
@@ -104,6 +108,18 @@ function App() {
                 <Route path="tickets" element={<MyTickets />} />
                 <Route path="tickets/:ticketId" element={<UserTicketDetailsPage />} />
                 <Route path="profile" element={<UserProfile />} />
+              </Route>
+            </Route>
+
+            <Route element={<TechnicianProtectedRoute />}>
+              <Route path="/technician" element={<TechnicianLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<TechnicianDashboard />} />
+                <Route path="tickets" element={<TechnicianPlaceholderPage title="My Assigned Tickets" description="The complete technician ticket workspace will be implemented in the next ticket-management module." />} />
+                <Route path="tickets/:ticketId" element={<TechnicianPlaceholderPage title="Ticket Details" description="Technician ticket actions and detailed troubleshooting controls will be implemented in the dedicated ticket workspace." />} />
+                <Route path="troubleshooting" element={<TechnicianPlaceholderPage title="Troubleshooting History" description="Your full troubleshooting history will be available in this workspace." />} />
+                <Route path="completed" element={<TechnicianPlaceholderPage title="Completed Tickets" description="Tickets completed through your resolutions will be listed here." />} />
+                <Route path="profile" element={<TechnicianPlaceholderPage title="My Profile" description="Technician profile and account settings will be added in a dedicated module." />} />
               </Route>
             </Route>
 
