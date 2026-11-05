@@ -53,8 +53,13 @@ export const technicianTicketService = {
     return response.data
   },
 
-  async addTroubleshooting(ticketId, payload) {
-    const response = await api.post(`/technician/tickets/${ticketId}/troubleshooting/`, payload)
+  async addTroubleshooting(ticketId, payload, attachments = []) {
+    const form = new FormData()
+    Object.entries(payload).forEach(([key, value]) => form.append(key, value))
+    attachments.forEach((file) => form.append('attachments', file))
+    const response = await api.post(`/technician/tickets/${ticketId}/troubleshooting/`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
     return response.data
   },
 

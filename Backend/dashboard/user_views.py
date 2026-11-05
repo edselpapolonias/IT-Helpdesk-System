@@ -67,7 +67,14 @@ def user_ticket_queryset(user):
                 "troubleshooting_logs",
                 queryset=TroubleshootingLog.objects.filter(
                     is_requester_visible=True
-                ).select_related("technician"),
+                ).select_related("technician").prefetch_related(
+                    Prefetch(
+                        "attachments",
+                        queryset=TicketAttachment.objects.filter(
+                            is_requester_visible=True
+                        ),
+                    )
+                ),
                 to_attr="requester_updates",
             ),
             Prefetch(

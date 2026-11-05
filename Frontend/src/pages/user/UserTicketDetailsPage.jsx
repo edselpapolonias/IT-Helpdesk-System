@@ -235,7 +235,7 @@ export default function UserTicketDetailsPage() {
       </section>
 
       <TicketProgressTimeline events={state.events} loading={false} />
-      <PublicTechnicianUpdates updates={ticket.technician_updates || []} />
+      <PublicTechnicianUpdates updates={ticket.technician_updates || []} onDownload={downloadAttachment} onPreview={previewAttachment} />
       <TicketAttachmentList attachments={ticket.attachments || []} error={attachmentError} onDownload={downloadAttachment} onPreview={previewAttachment} />
 
       <ConfirmResolutionDialog open={confirmOpen} loading={action.loading === 'confirm'} error={confirmOpen ? action.error : ''} onClose={() => { if (!action.loading) setConfirmOpen(false) }} onConfirm={confirmResolution} />

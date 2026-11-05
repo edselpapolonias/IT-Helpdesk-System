@@ -197,12 +197,39 @@ class UserTicketDetailSerializer(serializers.ModelSerializer):
             {
                 "id": update.id,
                 "action_summary": update.action_taken,
+                "diagnosis": (
+                    update.diagnosis
+                    if update.public_notes == update.notes
+                    else ""
+                ),
                 "public_notes": update.public_notes,
                 "technician": (
                     update.technician.get_full_name()
                     or update.technician.username
                 ),
                 "created_at": update.created_at,
+                "attachments": [
+                    {
+                        "id": attachment.id,
+                        "original_filename": attachment.original_filename,
+                        "file_size": attachment.file_size,
+                        "file_type": (
+                            Path(attachment.original_filename)
+                            .suffix.lstrip(".")
+                            .upper()
+                            or "FILE"
+                        ),
+                        "preview_supported": (
+                            Path(attachment.original_filename).suffix.lower()
+                            in {".jpg", ".jpeg", ".png", ".pdf"}
+                        ),
+                        "download_url": (
+                            f"/api/user/tickets/{obj.id}/attachments/"
+                            f"{attachment.id}/download/"
+                        ),
+                    }
+                    for attachment in update.attachments.all()
+                ],
             }
             for update in updates
         ]

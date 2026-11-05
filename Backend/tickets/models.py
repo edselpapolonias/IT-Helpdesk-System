@@ -269,27 +269,32 @@ class TroubleshootingLog(models.Model):
         related_name="troubleshooting_logs",
     )
     action_taken = models.CharField(max_length=220)
+    diagnosis = models.TextField(blank=True, default="")
     notes = models.TextField(blank=True, default="")
     is_requester_visible = models.BooleanField(default=False)
     public_notes = models.TextField(blank=True, default="")
+    submission_key = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ("created_at",)
+        indexes = [
+            models.Index(
+                fields=("technician", "-created_at"),
+                name="tickets_tr_tech_created_idx",
+            ),
+        ]
 
     def clean(self):
         super().clean()
         user_model = self.technician.__class__
         if self.technician.role != user_model.Role.TECHNICIAN:
             raise ValidationError({"technician": "User must be an IT technician."})
-        if self.is_requester_visible and not self.public_notes.strip():
-            raise ValidationError(
-                {
-                    "public_notes": (
-                        "Requester-visible notes are required when sharing an update."
-                    )
-                }
-            )
 
 
 class TicketResolution(models.Model):
@@ -320,6 +325,13 @@ class TicketAttachment(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="ticket_attachments",
+    )
+    troubleshooting_log = models.ForeignKey(
+        TroubleshootingLog,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attachments",
     )
     file = models.FileField(
         upload_to=attachment_upload_path,

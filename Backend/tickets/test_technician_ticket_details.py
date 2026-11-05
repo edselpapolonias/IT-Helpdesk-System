@@ -244,7 +244,7 @@ class TechnicianTicketDetailsTests(APITestCase):
         self.assertNotIn("resolution", event_types)
         self.assertNotIn("closed", [item["title"].lower() for item in response.data["results"]])
 
-    def test_troubleshooting_updates_are_internal_and_in_progress_only(self):
+    def test_troubleshooting_updates_support_visibility_and_in_progress_only(self):
         in_progress, _ = self.create_ticket(status=Ticket.Status.IN_PROGRESS)
         assigned, _ = self.create_ticket(status=Ticket.Status.ASSIGNED)
 
@@ -253,20 +253,26 @@ class TechnicianTicketDetailsTests(APITestCase):
             {
                 "action_taken": "Ran memory diagnostics",
                 "notes": "No memory errors found.",
+                "submission_key": "2b798f0e-301a-46c8-b352-50213b4da81a",
             },
             format="json",
         )
-        visibility_attempt = self.client.post(
+        requester_visible = self.client.post(
             f"/api/technician/tickets/{in_progress.id}/troubleshooting/",
             {
                 "action_taken": "Shared update",
-                "is_requester_visible": True,
+                "notes": "The device passed the diagnostic check.",
+                "visibility": "REQUESTER_VISIBLE",
+                "submission_key": "018b8685-121e-4cee-b4e1-f0b278278640",
             },
             format="json",
         )
         invalid_status = self.client.post(
             f"/api/technician/tickets/{assigned.id}/troubleshooting/",
-            {"action_taken": "Started too early"},
+            {
+                "action_taken": "Started too early",
+                "submission_key": "e8085979-a679-49c2-9066-fb7200863f86",
+            },
             format="json",
         )
 
@@ -274,7 +280,12 @@ class TechnicianTicketDetailsTests(APITestCase):
         log = TroubleshootingLog.objects.get(pk=created.data["id"])
         self.assertFalse(log.is_requester_visible)
         self.assertEqual(log.public_notes, "")
-        self.assertEqual(visibility_attempt.status_code, 400)
-        self.assertIn("is_requester_visible", visibility_attempt.data)
+        self.assertEqual(requester_visible.status_code, 201)
+        shared_log = TroubleshootingLog.objects.get(pk=requester_visible.data["id"])
+        self.assertTrue(shared_log.is_requester_visible)
+        self.assertEqual(
+            shared_log.public_notes,
+            "The device passed the diagnostic check.",
+        )
         self.assertEqual(invalid_status.status_code, 400)
         self.assertIn("status", invalid_status.data)

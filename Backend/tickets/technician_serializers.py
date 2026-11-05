@@ -11,6 +11,16 @@ from .models import (
 )
 
 
+MAX_TROUBLESHOOTING_ATTACHMENTS = 5
+MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
+ALLOWED_TROUBLESHOOTING_ATTACHMENTS = {
+    ".jpg": b"\xff\xd8\xff",
+    ".jpeg": b"\xff\xd8\xff",
+    ".png": b"\x89PNG\r\n\x1a\n",
+    ".pdf": b"%PDF-",
+}
+
+
 def display_name(user):
     return user.get_full_name() or user.username
 
@@ -181,6 +191,7 @@ class TechnicianAttachmentSerializer(serializers.ModelSerializer):
             "file_size",
             "file_type",
             "preview_supported",
+            "is_requester_visible",
             "uploaded_by",
             "uploaded_at",
         )
@@ -197,43 +208,116 @@ class TechnicianAttachmentSerializer(serializers.ModelSerializer):
 
 class TechnicianTroubleshootingSerializer(serializers.ModelSerializer):
     technician = serializers.SerializerMethodField()
+    ticket = serializers.SerializerMethodField()
+    visibility = serializers.SerializerMethodField()
+    attachments = TechnicianAttachmentSerializer(many=True, read_only=True)
+    can_view_ticket = serializers.SerializerMethodField()
 
     class Meta:
         model = TroubleshootingLog
         fields = (
             "id",
+            "ticket",
             "technician",
             "action_taken",
+            "diagnosis",
             "notes",
+            "visibility",
             "is_requester_visible",
             "public_notes",
+            "attachments",
+            "can_view_ticket",
             "created_at",
         )
 
     def get_technician(self, obj):
         return {"id": obj.technician_id, "name": display_name(obj.technician)}
 
+    def get_ticket(self, obj):
+        return {
+            "id": obj.ticket_id,
+            "ticket_number": obj.ticket.ticket_number,
+            "title": obj.ticket.title,
+            "status": obj.ticket.status,
+        }
+
+    def get_visibility(self, obj):
+        return "REQUESTER_VISIBLE" if obj.is_requester_visible else "INTERNAL"
+
+    def get_can_view_ticket(self, obj):
+        request = self.context.get("request")
+        if request is None:
+            return True
+        user = request.user
+        if (
+            obj.ticket.status in {
+                Ticket.Status.ASSIGNED,
+                Ticket.Status.IN_PROGRESS,
+                Ticket.Status.REOPENED,
+            }
+            and obj.ticket.assigned_technician_id == user.id
+            and obj.ticket.assignment_history.filter(
+                technician=user,
+                is_current=True,
+            ).exists()
+        ):
+            return True
+        if obj.ticket.status in {Ticket.Status.RESOLVED, Ticket.Status.CLOSED}:
+            return obj.ticket.assignment_history.filter(technician=user).exists() or (
+                obj.ticket.resolutions.filter(resolved_by=user).exists()
+            )
+        return False
+
 
 class TechnicianTroubleshootingCreateSerializer(serializers.Serializer):
     action_taken = serializers.CharField(max_length=220, trim_whitespace=True)
+    diagnosis = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=5000,
+        trim_whitespace=True,
+    )
     notes = serializers.CharField(
         required=False,
         allow_blank=True,
         max_length=5000,
         trim_whitespace=True,
     )
+    visibility = serializers.ChoiceField(
+        choices=("INTERNAL", "REQUESTER_VISIBLE"),
+        default="INTERNAL",
+    )
+    submission_key = serializers.UUIDField()
+    attachments = serializers.ListField(
+        child=serializers.FileField(),
+        required=False,
+        allow_empty=True,
+    )
 
-    def to_internal_value(self, data):
-        allowed_fields = {"action_taken", "notes"}
-        unknown_fields = set(data.keys()) - allowed_fields
-        if unknown_fields:
+    def validate_attachments(self, files):
+        if len(files) > MAX_TROUBLESHOOTING_ATTACHMENTS:
             raise serializers.ValidationError(
-                {
-                    field: "This field cannot be set by technicians."
-                    for field in unknown_fields
-                }
+                f"A maximum of {MAX_TROUBLESHOOTING_ATTACHMENTS} attachments is allowed."
             )
-        return super().to_internal_value(data)
+        for upload in files:
+            safe_name = Path(upload.name).name
+            extension = Path(safe_name).suffix.lower()
+            expected_signature = ALLOWED_TROUBLESHOOTING_ATTACHMENTS.get(extension)
+            if expected_signature is None:
+                raise serializers.ValidationError(
+                    "Only JPG, JPEG, PNG, and PDF attachments are allowed."
+                )
+            if upload.size > MAX_ATTACHMENT_SIZE:
+                raise serializers.ValidationError(
+                    f"{safe_name} exceeds the 10 MB file size limit."
+                )
+            signature = upload.read(8)
+            upload.seek(0)
+            if not signature.startswith(expected_signature):
+                raise serializers.ValidationError(
+                    f"{safe_name} does not match its file extension."
+                )
+        return files
 
 
 class TechnicianResolutionSerializer(serializers.ModelSerializer):

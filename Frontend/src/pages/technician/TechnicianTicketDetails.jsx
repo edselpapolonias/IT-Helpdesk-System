@@ -112,13 +112,13 @@ export default function TechnicianTicketDetails() {
     }
   }
 
-  async function addTroubleshooting(payload) {
+  async function addTroubleshooting(payload, attachments) {
     setSavingTroubleshooting(true)
     setTroubleshootingError('')
     try {
-      await technicianTicketService.addTroubleshooting(ticketId, payload)
+      const result = await technicianTicketService.addTroubleshooting(ticketId, payload, attachments)
       setTroubleshootingOpen(false)
-      setToast('Troubleshooting update saved as an internal note.')
+      setToast(result.duplicate_submission ? 'This troubleshooting log was already saved.' : result.visibility === 'REQUESTER_VISIBLE' ? 'Troubleshooting log saved and shared with the requester.' : 'Troubleshooting log saved as an internal note.')
       await loadRelated()
     } catch (error) {
       setTroubleshootingError(getApiError(error, 'Unable to save this troubleshooting update.'))
@@ -196,7 +196,7 @@ export default function TechnicianTicketDetails() {
         <div className="space-y-5">
           <TicketOverview ticket={ticket} />
           <TechnicianTicketAttachments attachments={related.attachments} loadingId={attachmentLoading} error={attachmentError} onPreview={previewAttachment} onDownload={downloadAttachment} />
-          <TroubleshootingPreview logs={related.troubleshooting} canAdd={ticket.can_add_troubleshooting} onAdd={() => { setTroubleshootingError(''); setTroubleshootingOpen(true) }} />
+          <TroubleshootingPreview logs={related.troubleshooting} canAdd={ticket.can_add_troubleshooting} onAdd={() => { setTroubleshootingError(''); setTroubleshootingOpen(true) }} onPreview={previewAttachment} onDownload={downloadAttachment} attachmentLoading={attachmentLoading} />
           <ResolutionPreview resolutions={related.resolutions} />
           <TicketProgressTimeline events={related.history} />
         </div>

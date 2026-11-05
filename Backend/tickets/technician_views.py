@@ -2,7 +2,7 @@ import mimetypes
 from datetime import timedelta
 from pathlib import Path
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.db.models.functions import Concat
 from django.http import FileResponse
@@ -52,6 +52,12 @@ class TechnicianTicketConflict(APIException):
 
 
 class TechnicianTicketPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 50
+
+
+class TechnicianTroubleshootingPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = "page_size"
     max_page_size = 50
@@ -418,12 +424,13 @@ class TechnicianTicketHistoryView(TechnicianTicketMixin, APIView):
             )
 
         for item in ticket.troubleshooting_logs.select_related("technician"):
+            description_parts = [part for part in (item.diagnosis, item.notes) if part]
             events.append(
                 {
                     "id": f"troubleshooting-{item.id}",
                     "type": "troubleshooting",
                     "title": item.action_taken,
-                    "description": item.notes,
+                    "description": "\n\n".join(description_parts),
                     "actor": display_name(item.technician),
                     "timestamp": item.created_at,
                 }
@@ -486,9 +493,17 @@ class TechnicianTicketAttachmentDownloadView(TechnicianTicketMixin, APIView):
 class TechnicianTicketTroubleshootingView(TechnicianTicketMixin, APIView):
     def get(self, request, pk):
         ticket, _, _ = technician_ticket_access(request.user, pk)
-        logs = ticket.troubleshooting_logs.select_related("technician")
+        logs = ticket.troubleshooting_logs.select_related(
+            "technician", "ticket"
+        ).prefetch_related("attachments__uploaded_by")
         return Response(
-            {"results": TechnicianTroubleshootingSerializer(logs, many=True).data}
+            {
+                "results": TechnicianTroubleshootingSerializer(
+                    logs,
+                    many=True,
+                    context={"request": request},
+                ).data
+            }
         )
 
     @transaction.atomic
@@ -503,19 +518,92 @@ class TechnicianTicketTroubleshootingView(TechnicianTicketMixin, APIView):
             raise ValidationError(
                 {"status": "Troubleshooting updates require an In Progress ticket."}
             )
-        serializer = TechnicianTroubleshootingCreateSerializer(data=request.data)
+        payload = {
+            "action_taken": request.data.get("action_taken", ""),
+            "diagnosis": request.data.get("diagnosis", ""),
+            "notes": request.data.get("notes", ""),
+            "visibility": request.data.get("visibility", "INTERNAL"),
+            "submission_key": request.data.get("submission_key", ""),
+            "attachments": request.FILES.getlist("attachments"),
+        }
+        serializer = TechnicianTroubleshootingCreateSerializer(data=payload)
         serializer.is_valid(raise_exception=True)
-        log = TroubleshootingLog.objects.create(
+        values = serializer.validated_data
+        submission_key = values["submission_key"]
+        existing = TroubleshootingLog.objects.filter(
+            submission_key=submission_key,
             ticket=ticket,
             technician=request.user,
-            is_requester_visible=False,
-            public_notes="",
-            **serializer.validated_data,
-        )
-        return Response(
-            TechnicianTroubleshootingSerializer(log).data,
-            status=status.HTTP_201_CREATED,
-        )
+        ).first()
+        if existing is not None:
+            existing = TroubleshootingLog.objects.select_related(
+                "ticket", "technician"
+            ).prefetch_related("attachments__uploaded_by").get(pk=existing.pk)
+            data = TechnicianTroubleshootingSerializer(
+                existing,
+                context={"request": request},
+            ).data
+            data["duplicate_submission"] = True
+            return Response(data)
+
+        visible = values["visibility"] == "REQUESTER_VISIBLE"
+        saved_attachments = []
+        try:
+            with transaction.atomic():
+                log = TroubleshootingLog.objects.create(
+                    ticket=ticket,
+                    technician=request.user,
+                    action_taken=values["action_taken"],
+                    diagnosis=values.get("diagnosis", ""),
+                    notes=values.get("notes", ""),
+                    is_requester_visible=visible,
+                    public_notes=values.get("notes", "") if visible else "",
+                    submission_key=submission_key,
+                )
+                for upload in values.get("attachments", []):
+                    attachment = TicketAttachment(
+                        ticket=ticket,
+                        troubleshooting_log=log,
+                        uploaded_by=request.user,
+                        file=upload,
+                        original_filename=Path(upload.name).name,
+                        file_size=upload.size,
+                        is_requester_visible=visible,
+                    )
+                    attachment.full_clean()
+                    saved_attachments.append(attachment)
+                    attachment.save()
+        except IntegrityError:
+            for attachment in saved_attachments:
+                attachment.file.delete(save=False)
+            existing = get_object_or_404(
+                TroubleshootingLog.objects.select_related(
+                    "ticket", "technician"
+                ).prefetch_related("attachments__uploaded_by"),
+                submission_key=submission_key,
+                ticket=ticket,
+                technician=request.user,
+            )
+            data = TechnicianTroubleshootingSerializer(
+                existing,
+                context={"request": request},
+            ).data
+            data["duplicate_submission"] = True
+            return Response(data)
+        except Exception:
+            for attachment in saved_attachments:
+                attachment.file.delete(save=False)
+            raise
+
+        log = TroubleshootingLog.objects.select_related(
+            "ticket", "technician"
+        ).prefetch_related("attachments__uploaded_by").get(pk=log.pk)
+        data = TechnicianTroubleshootingSerializer(
+            log,
+            context={"request": request},
+        ).data
+        data["duplicate_submission"] = False
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class TechnicianTicketResolutionsView(TechnicianTicketMixin, APIView):
@@ -524,4 +612,80 @@ class TechnicianTicketResolutionsView(TechnicianTicketMixin, APIView):
         resolutions = ticket.resolutions.select_related("resolved_by")
         return Response(
             {"results": TechnicianResolutionSerializer(resolutions, many=True).data}
+        )
+
+
+class TechnicianTroubleshootingHistoryView(TechnicianTicketMixin, generics.ListAPIView):
+    serializer_class = TechnicianTroubleshootingSerializer
+    pagination_class = TechnicianTroubleshootingPagination
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "request": self.request}
+
+    def get_queryset(self):
+        queryset = TroubleshootingLog.objects.filter(
+            technician=self.request.user
+        ).select_related("ticket", "technician").prefetch_related(
+            "attachments__uploaded_by"
+        )
+        params = self.request.query_params
+        search = params.get("search", "").strip()
+        ticket_filter = params.get("ticket", "").strip()
+        visibility = params.get("visibility", "all").strip().upper()
+        date_from = optional_date(params.get("date_from"), "date_from")
+        date_to = optional_date(params.get("date_to"), "date_to")
+
+        if search:
+            queryset = queryset.filter(
+                Q(ticket__ticket_number__icontains=search)
+                | Q(ticket__title__icontains=search)
+                | Q(action_taken__icontains=search)
+                | Q(diagnosis__icontains=search)
+                | Q(notes__icontains=search)
+            )
+        if ticket_filter:
+            ticket_query = Q(ticket__ticket_number__icontains=ticket_filter)
+            if ticket_filter.isdigit():
+                ticket_query |= Q(ticket_id=int(ticket_filter))
+            queryset = queryset.filter(ticket_query)
+        if visibility == "INTERNAL":
+            queryset = queryset.filter(is_requester_visible=False)
+        elif visibility == "REQUESTER_VISIBLE":
+            queryset = queryset.filter(is_requester_visible=True)
+        elif visibility != "ALL":
+            raise ValidationError({"visibility": "Invalid visibility filter."})
+        if date_from:
+            queryset = queryset.filter(created_at__date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(created_at__date__lte=date_to)
+        if date_from and date_to and date_from > date_to:
+            raise ValidationError(
+                {"date_to": "End date must be on or after the start date."}
+            )
+
+        ordering = params.get("ordering", "-created_at")
+        orderings = {
+            "-created_at": ("-created_at", "-id"),
+            "created_at": ("created_at", "id"),
+            "ticket": ("ticket__ticket_number", "-created_at"),
+        }
+        if ordering not in orderings:
+            raise ValidationError({"ordering": "Unsupported ordering value."})
+        return queryset.order_by(*orderings[ordering])
+
+
+class TechnicianTroubleshootingDetailView(TechnicianTicketMixin, APIView):
+    def get(self, request, pk):
+        log = get_object_or_404(
+            TroubleshootingLog.objects.select_related(
+                "ticket", "technician"
+            ).prefetch_related("attachments__uploaded_by"),
+            pk=pk,
+            technician=request.user,
+        )
+        return Response(
+            TechnicianTroubleshootingSerializer(
+                log,
+                context={"request": request},
+            ).data
         )

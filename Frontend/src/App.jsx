@@ -30,6 +30,7 @@ const TechnicianDashboard = lazy(() => import('./pages/technician/TechnicianDash
 const TechnicianPlaceholderPage = lazy(() => import('./pages/technician/TechnicianPlaceholderPage'))
 const MyAssignedTickets = lazy(() => import('./pages/technician/MyAssignedTickets'))
 const TechnicianTicketDetails = lazy(() => import('./pages/technician/TechnicianTicketDetails'))
+const TroubleshootingHistory = lazy(() => import('./pages/technician/TroubleshootingHistory'))
 
 function PageLoader() {
   return (
@@ -120,7 +121,7 @@ function App() {
                 <Route path="tickets" element={<MyAssignedTickets />} />
                 <Route path="tickets/:ticketId/resolve" element={<TechnicianPlaceholderPage title="Resolve Ticket" description="The guided resolution form will be implemented in the technician resolution module. Return to the ticket details page to continue reviewing the active work." />} />
                 <Route path="tickets/:ticketId" element={<TechnicianTicketDetails />} />
-                <Route path="troubleshooting" element={<TechnicianPlaceholderPage title="Troubleshooting History" description="Your full troubleshooting history will be available in this workspace." />} />
+                <Route path="troubleshooting" element={<TroubleshootingHistory />} />
                 <Route path="completed" element={<TechnicianPlaceholderPage title="Completed Tickets" description="Tickets completed through your resolutions will be listed here." />} />
                 <Route path="profile" element={<TechnicianPlaceholderPage title="My Profile" description="Technician profile and account settings will be added in a dedicated module." />} />
               </Route>

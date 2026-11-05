@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from rest_framework import serializers
 
 from .models import (
@@ -150,6 +152,7 @@ class StatusTransitionSerializer(serializers.Serializer):
 
 class TroubleshootingLogSerializer(serializers.ModelSerializer):
     technician = serializers.SerializerMethodField()
+    attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = TroubleshootingLog
@@ -157,14 +160,33 @@ class TroubleshootingLogSerializer(serializers.ModelSerializer):
             "id",
             "technician",
             "action_taken",
+            "diagnosis",
             "notes",
             "is_requester_visible",
             "public_notes",
+            "attachments",
             "created_at",
         )
 
     def get_technician(self, obj):
         return {"id": obj.technician_id, "name": display_name(obj.technician)}
+
+    def get_attachments(self, obj):
+        return [
+            {
+                "id": attachment.id,
+                "original_filename": attachment.original_filename,
+                "file_size": attachment.file_size,
+                "file_type": Path(attachment.original_filename).suffix.lstrip(".").upper()
+                or "FILE",
+                "is_requester_visible": attachment.is_requester_visible,
+                "download_url": (
+                    f"/api/admin/tickets/{obj.ticket_id}/attachments/"
+                    f"{attachment.id}/download/"
+                ),
+            }
+            for attachment in obj.attachments.all()
+        ]
 
 
 class TroubleshootingVisibilitySerializer(serializers.Serializer):

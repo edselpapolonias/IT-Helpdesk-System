@@ -390,7 +390,9 @@ class AdminTicketHistoryView(AdminTicketMixin, APIView):
 class AdminTicketTroubleshootingView(AdminTicketMixin, APIView):
     def get(self, request, pk):
         ticket = self.get_object()
-        logs = ticket.troubleshooting_logs.select_related("technician")
+        logs = ticket.troubleshooting_logs.select_related(
+            "technician"
+        ).prefetch_related("attachments")
         return Response(
             {"results": TroubleshootingLogSerializer(logs, many=True).data}
         )
