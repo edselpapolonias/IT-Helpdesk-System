@@ -25,5 +25,6 @@ urlpatterns = [
     path("api/admin/tickets/", include("tickets.admin_urls")),
     path("api/admin/assignments/", include("tickets.assignment_urls")),
     path("api/admin/dashboard/", include("dashboard.urls")),
+    path("api/user/", include("dashboard.user_urls")),
     path("api/ticket-categories/", include("tickets.urls")),
 ]

@@ -1,0 +1,3 @@
+export default function UserStatCard({ title, value, description, icon: Icon, tone, loading }) {
+  return <article className="rounded-lg border border-slate-200 bg-white p-5">{loading ? <div className="h-16 animate-pulse rounded bg-slate-100" /> : <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-slate-500">{title}</p><p className="mt-1 text-2xl font-bold text-slate-900">{value ?? 0}</p><p className="mt-2 text-[11px] leading-4 text-slate-400">{description}</p></div><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${tone}`}><Icon size={19} /></span></div>}</article>
+}

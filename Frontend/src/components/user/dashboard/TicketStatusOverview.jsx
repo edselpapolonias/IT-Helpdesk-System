@@ -1,0 +1,10 @@
+import { BarChart3 } from 'lucide-react'
+import { statusLabels } from '../../admin/tickets/constants'
+
+const tones = { OPEN: 'bg-slate-400', ASSIGNED: 'bg-violet-500', IN_PROGRESS: 'bg-blue-500', RESOLVED: 'bg-emerald-600', CLOSED: 'bg-zinc-500' }
+
+export default function TicketStatusOverview({ state, onRetry }) {
+  const distribution = state.data?.status_distribution || []
+  const total = state.data?.total || 0
+  return <section className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6"><div className="flex items-center gap-2"><BarChart3 size={18} className="text-emerald-700" /><h2 className="text-base font-semibold text-slate-900">Ticket status overview</h2></div><p className="mt-1 text-xs text-slate-500">How your requests are distributed across the support workflow.</p>{state.loading ? <div className="mt-5 h-44 animate-pulse rounded bg-slate-100" /> : state.error ? <div className="mt-5 rounded-md bg-red-50 p-5 text-center"><p className="text-xs font-semibold text-red-700">{state.error}</p><button type="button" onClick={onRetry} className="mt-2 text-xs font-semibold text-red-700 underline">Retry</button></div> : total === 0 ? <div className="mt-6 rounded-md bg-slate-50 p-8 text-center"><p className="text-sm font-semibold text-slate-600">No ticket status data yet</p><p className="mt-1 text-xs text-slate-400">Your status overview will appear after your first request.</p></div> : <div className="mt-5 space-y-4">{distribution.map((item) => { const percentage = Math.round((item.count / total) * 100); return <div key={item.status}><div className="mb-1.5 flex items-center justify-between text-xs"><span className="font-medium text-slate-600">{statusLabels[item.status]}</span><span className="font-semibold text-slate-800">{item.count} <span className="font-normal text-slate-400">({percentage}%)</span></span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${tones[item.status]}`} style={{ width: `${percentage}%` }} /></div></div> })}</div>}</section>
+}

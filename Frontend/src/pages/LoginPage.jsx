@@ -26,6 +26,8 @@ export default function LoginPage() {
   useEffect(() => {
     if (user?.role === 'ADMIN') {
       navigate('/it-admin/dashboard', { replace: true })
+    } else if (user?.role === 'USER') {
+      navigate('/user/dashboard', { replace: true })
     }
   }, [navigate, user])
 
@@ -36,15 +38,19 @@ export default function LoginPage() {
     setIsSubmitting(true)
 
     try {
-      await login({
+      const authenticatedUser = await login({
         email: form.get('email'),
         password: form.get('password'),
       })
       const destination = location.state?.from?.pathname
+      const roleHome = authenticatedUser.role === 'ADMIN'
+        ? '/it-admin/dashboard'
+        : '/user/dashboard'
+      const destinationMatchesRole =
+        (authenticatedUser.role === 'ADMIN' && destination?.startsWith('/it-admin')) ||
+        (authenticatedUser.role === 'USER' && destination?.startsWith('/user'))
       navigate(
-        destination?.startsWith('/it-admin')
-          ? destination
-          : '/it-admin/dashboard',
+        destinationMatchesRole ? destination : roleHome,
         { replace: true },
       )
     } catch (requestError) {
@@ -91,7 +97,7 @@ export default function LoginPage() {
 
           <div className="login-header">
             <h2 id="login-heading">Sign in to your account</h2>
-            <p>Enter your administrator account details to continue.</p>
+            <p>Enter your account details to continue.</p>
           </div>
 
           {error && (
@@ -159,7 +165,7 @@ export default function LoginPage() {
           </form>
 
           <p className="access-note">
-            Authorized personnel only. Contact IT Services if you need access.
+            Use your registered SAM account. Contact IT Services if you need access.
           </p>
         </div>
 

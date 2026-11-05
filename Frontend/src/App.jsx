@@ -3,7 +3,9 @@ import { LoaderCircle } from 'lucide-react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 import AdminProtectedRoute from './components/auth/AdminProtectedRoute'
+import UserProtectedRoute from './components/auth/UserProtectedRoute'
 import AdminLayout from './components/admin/layout/AdminLayout'
+import UserLayout from './components/user/layout/UserLayout'
 import { AuthProvider } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 
@@ -16,6 +18,8 @@ const TechnicianDetailsPage = lazy(() => import('./pages/admin/TechnicianDetails
 const TicketManagement = lazy(() => import('./pages/admin/TicketManagement'))
 const TicketDetailsPage = lazy(() => import('./pages/admin/TicketDetailsPage'))
 const TechnicianAssignment = lazy(() => import('./pages/admin/TechnicianAssignment'))
+const UserDashboard = lazy(() => import('./pages/user/UserDashboard'))
+const UserTicketDetailsPage = lazy(() => import('./pages/user/UserTicketDetailsPage'))
 const PasswordSetupPage = lazy(() => import('./pages/PasswordSetupPage'))
 
 function PageLoader() {
@@ -86,6 +90,17 @@ function App() {
                   />
                 }
               />
+              </Route>
+            </Route>
+
+            <Route element={<UserProtectedRoute />}>
+              <Route path="/user" element={<UserLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<UserDashboard />} />
+                <Route path="tickets/new" element={<PlaceholderPage title="Submit Ticket" description="The ticket submission form will be introduced in the next Regular User module." />} />
+                <Route path="tickets" element={<PlaceholderPage title="My Tickets" description="The complete ticket list and filtering workspace will be introduced in the next Regular User module." />} />
+                <Route path="tickets/:ticketId" element={<UserTicketDetailsPage />} />
+                <Route path="profile" element={<PlaceholderPage title="My Profile" description="Profile maintenance will be introduced in a future Regular User module." />} />
               </Route>
             </Route>
 

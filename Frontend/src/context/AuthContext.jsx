@@ -24,8 +24,8 @@ export function AuthProvider({ children }) {
       .getCurrentUser()
       .then((currentUser) => {
         if (!active) return
-        if (currentUser.role !== 'ADMIN') {
-          throw new Error('Administrator access is required.')
+        if (!['ADMIN', 'USER'].includes(currentUser.role)) {
+          throw new Error('This account does not have an available portal.')
         }
         setUser(currentUser)
         localStorage.setItem('sam_admin_user', JSON.stringify(currentUser))

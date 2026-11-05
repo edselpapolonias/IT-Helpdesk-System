@@ -11,7 +11,7 @@ from .serializers import LoginSerializer, UserSummarySerializer
 User = get_user_model()
 
 
-class AdminLoginView(APIView):
+class LoginView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
@@ -40,9 +40,9 @@ class AdminLoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if user.role != User.Role.ADMIN:
+        if user.role not in (User.Role.ADMIN, User.Role.USER):
             return Response(
-                {"detail": "This portal is restricted to IT administrators."},
+                {"detail": "The technician portal is not available yet."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 

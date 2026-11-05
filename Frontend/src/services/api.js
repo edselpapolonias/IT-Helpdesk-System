@@ -21,7 +21,8 @@ api.interceptors.response.use(
   (error) => {
     if (
       error.response?.status === 401 &&
-      window.location.pathname.startsWith('/it-admin')
+      (window.location.pathname.startsWith('/it-admin') ||
+        window.location.pathname.startsWith('/user'))
     ) {
       localStorage.removeItem('sam_admin_token')
       localStorage.removeItem('sam_admin_user')

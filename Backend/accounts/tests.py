@@ -13,7 +13,7 @@ from .models import UserAuditLog
 User = get_user_model()
 
 
-class AdminAuthenticationTests(APITestCase):
+class AuthenticationTests(APITestCase):
     def setUp(self):
         self.password = "A-strong-test-password-2026"
         self.admin = User.objects.create_user(
@@ -28,6 +28,12 @@ class AdminAuthenticationTests(APITestCase):
             password=self.password,
             role=User.Role.USER,
         )
+        self.technician = User.objects.create_user(
+            username="login-technician",
+            email="technician@example.test",
+            password=self.password,
+            role=User.Role.TECHNICIAN,
+        )
 
     def test_admin_can_login_and_receive_authenticated_profile(self):
         response = self.client.post(
@@ -40,15 +46,26 @@ class AdminAuthenticationTests(APITestCase):
         self.assertEqual(response.data["user"]["role"], User.Role.ADMIN)
         self.assertTrue(Token.objects.filter(user=self.admin).exists())
 
-    def test_non_admin_cannot_login_to_admin_portal(self):
+    def test_regular_user_can_login_to_requester_portal(self):
         response = self.client.post(
             "/api/auth/login/",
             {"email": self.regular_user.email, "password": self.password},
             format="json",
         )
 
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["user"]["role"], User.Role.USER)
+        self.assertTrue(Token.objects.filter(user=self.regular_user).exists())
+
+    def test_technician_login_is_rejected_until_portal_exists(self):
+        response = self.client.post(
+            "/api/auth/login/",
+            {"email": self.technician.email, "password": self.password},
+            format="json",
+        )
+
         self.assertEqual(response.status_code, 403)
-        self.assertFalse(Token.objects.filter(user=self.regular_user).exists())
+        self.assertFalse(Token.objects.filter(user=self.technician).exists())
 
     def test_invalid_credentials_return_generic_error(self):
         response = self.client.post(

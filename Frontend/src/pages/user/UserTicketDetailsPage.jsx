@@ -1,0 +1,23 @@
+import { ArrowLeft, CalendarDays, Clock3, MapPin, UserRound } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import TicketBadge from '../../components/admin/tickets/TicketBadge'
+import { priorityLabels, priorityTone, statusLabels, statusTone } from '../../components/admin/tickets/constants'
+import { getApiError } from '../../services/api'
+import { userDashboardService } from '../../services/userDashboardService'
+
+const formatter = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+function formatDate(value) { return value ? formatter.format(new Date(value)) : 'Not recorded' }
+function Info({ icon: Icon, label, value }) { return <div className="flex gap-3 border-b border-slate-100 py-3 last:border-0"><Icon size={17} className="mt-0.5 shrink-0 text-slate-400" /><div><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 text-sm font-medium text-slate-700">{value || 'Not specified'}</p></div></div> }
+
+export default function UserTicketDetailsPage() {
+  const { ticketId } = useParams()
+  const navigate = useNavigate()
+  const [state, setState] = useState({ data: null, loading: true, error: '' })
+  const load = useCallback(async (signal) => { setState((current) => ({ ...current, loading: true, error: '' })); try { setState({ data: await userDashboardService.ticket(ticketId, { signal }), loading: false, error: '' }) } catch (error) { if (error.code !== 'ERR_CANCELED') setState({ data: null, loading: false, error: getApiError(error, 'Unable to load this ticket.') }) } }, [ticketId])
+  useEffect(() => { const controller = new AbortController(); const task = setTimeout(() => load(controller.signal), 0); return () => { clearTimeout(task); controller.abort() } }, [load])
+  if (state.loading) return <div className="mx-auto max-w-5xl space-y-4"><div className="h-32 animate-pulse rounded-lg bg-slate-200" /><div className="h-80 animate-pulse rounded-lg bg-slate-200" /></div>
+  if (state.error) return <div className="mx-auto max-w-xl rounded-lg border border-red-200 bg-white p-8 text-center"><p className="text-sm font-semibold text-red-700">{state.error}</p><button type="button" onClick={() => navigate('/user/dashboard')} className="mt-4 rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold">Back to dashboard</button></div>
+  const ticket = state.data
+  return <div className="mx-auto max-w-5xl space-y-6"><button type="button" onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-emerald-700"><ArrowLeft size={15} /> Back</button><section className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-bold uppercase tracking-wider text-emerald-700">{ticket.ticket_number}</span><TicketBadge className={priorityTone(ticket.priority)}>{priorityLabels[ticket.priority]}</TicketBadge><TicketBadge className={statusTone(ticket.status)}>{statusLabels[ticket.status]}</TicketBadge></div><h2 className="mt-3 text-xl font-bold text-slate-900 sm:text-2xl">{ticket.title}</h2><p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">{ticket.description}</p></section><section className="grid gap-6 lg:grid-cols-2"><article className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6"><h3 className="text-base font-semibold text-slate-900">Request information</h3><div className="mt-3"><Info icon={Clock3} label="Category" value={ticket.category?.name || 'Uncategorized'} /><Info icon={MapPin} label="Location" value={ticket.location} /><Info icon={CalendarDays} label="Submitted" value={formatDate(ticket.created_at)} /><Info icon={CalendarDays} label="Last updated" value={formatDate(ticket.updated_at)} /></div></article><article className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6"><h3 className="text-base font-semibold text-slate-900">Support progress</h3><div className="mt-3"><Info icon={UserRound} label="Assigned technician" value={ticket.assigned_technician?.name || 'Unassigned'} /><Info icon={UserRound} label="Specialization" value={ticket.assigned_technician?.specialization} /><Info icon={Clock3} label="Resolved" value={formatDate(ticket.resolved_at)} /><Info icon={Clock3} label="Closed" value={formatDate(ticket.closed_at)} /></div></article></section></div>
+}
