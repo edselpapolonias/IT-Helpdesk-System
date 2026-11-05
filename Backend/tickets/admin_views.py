@@ -303,6 +303,8 @@ class AdminTicketHistoryView(AdminTicketMixin, APIView):
                 }
             )
         for item in ticket.status_history.select_related("changed_by"):
+            if item.previous_status == item.new_status:
+                continue
             events.append(
                 {
                     "type": "status",

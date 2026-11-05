@@ -61,7 +61,7 @@ class TicketManagementAPITests(APITestCase):
             "requester": self.requester,
             "category": self.category,
             "location": "Registrar Office",
-            "reported_urgency": Ticket.ReportedUrgency.HIGH,
+            "reported_urgency": Ticket.ReportedUrgency.URGENT,
         }
         values.update(overrides)
         return Ticket.objects.create(**values)

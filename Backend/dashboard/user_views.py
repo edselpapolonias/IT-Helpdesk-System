@@ -1,5 +1,10 @@
-from django.db.models import Count, Q
+from pathlib import Path
+
+from django.db import IntegrityError, transaction
+from django.db.models import Count, F, Q
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -7,12 +12,17 @@ from rest_framework.views import APIView
 from accounts.permissions import IsRegularUser
 from tickets.models import (
     Ticket,
+    TicketAttachment,
     TicketAssignment,
     TicketResolution,
     TicketStatusHistory,
 )
 
-from .user_serializers import UserRecentTicketSerializer, UserTicketDetailSerializer
+from .user_serializers import (
+    UserRecentTicketSerializer,
+    UserTicketCreateSerializer,
+    UserTicketDetailSerializer,
+)
 
 
 class RegularUserDashboardView(APIView):
@@ -104,6 +114,7 @@ class UserRecentActivityView(RegularUserDashboardView):
         status_changes = (
             TicketStatusHistory.objects.filter(ticket__requester=request.user)
             .exclude(new_status=Ticket.Status.ASSIGNED)
+            .exclude(previous_status=F("new_status"))
             .select_related("ticket")
             .order_by("-changed_at")[:10]
         )
@@ -146,8 +157,120 @@ class UserRecentActivityView(RegularUserDashboardView):
 class UserTicketDetailView(RegularUserDashboardView):
     def get(self, request, pk):
         ticket = get_object_or_404(
-            Ticket.objects.select_related("category", "assigned_technician"),
+            Ticket.objects.select_related(
+                "category", "assigned_technician"
+            ).prefetch_related("attachments"),
             pk=pk,
             requester=request.user,
         )
         return Response(UserTicketDetailSerializer(ticket).data)
+
+
+class UserTicketCreateView(RegularUserDashboardView):
+    def post(self, request):
+        payload = {
+            "title": request.data.get("title", ""),
+            "category": request.data.get("category", ""),
+            "description": request.data.get("description", ""),
+            "location": request.data.get("location", ""),
+            "reported_urgency": request.data.get("reported_urgency", ""),
+            "submission_key": request.data.get("submission_key", ""),
+            "attachments": request.FILES.getlist("attachments"),
+        }
+        serializer = UserTicketCreateSerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        submission_key = values["submission_key"]
+
+        existing = Ticket.objects.filter(submission_key=submission_key).first()
+        if existing is not None:
+            if existing.requester_id != request.user.id:
+                raise ValidationError(
+                    {"submission_key": "This submission key is already in use."}
+                )
+            existing = (
+                Ticket.objects.select_related("category", "assigned_technician")
+                .prefetch_related("attachments")
+                .get(pk=existing.pk)
+            )
+            data = UserTicketDetailSerializer(existing).data
+            data["duplicate_submission"] = True
+            return Response(data)
+
+        saved_attachments = []
+        try:
+            with transaction.atomic():
+                ticket = Ticket.objects.create(
+                    submission_key=submission_key,
+                    requester=request.user,
+                    title=values["title"],
+                    category=values["category"],
+                    description=values["description"],
+                    location=values["location"],
+                    reported_urgency=values["reported_urgency"],
+                    priority=Ticket.Priority.MEDIUM,
+                    status=Ticket.Status.OPEN,
+                )
+                TicketStatusHistory.objects.create(
+                    ticket=ticket,
+                    previous_status=Ticket.Status.OPEN,
+                    new_status=Ticket.Status.OPEN,
+                    changed_by=request.user,
+                    reason="Ticket submitted by requester.",
+                )
+                for upload in values.get("attachments", []):
+                    attachment = TicketAttachment(
+                        ticket=ticket,
+                        uploaded_by=request.user,
+                        file=upload,
+                        original_filename=Path(upload.name).name,
+                        file_size=upload.size,
+                    )
+                    attachment.full_clean()
+                    saved_attachments.append(attachment)
+                    attachment.save()
+        except IntegrityError:
+            for attachment in saved_attachments:
+                attachment.file.delete(save=False)
+            existing = Ticket.objects.filter(
+                submission_key=submission_key,
+                requester=request.user,
+            ).first()
+            if existing is None:
+                raise
+            existing = (
+                Ticket.objects.select_related("category", "assigned_technician")
+                .prefetch_related("attachments")
+                .get(pk=existing.pk)
+            )
+            data = UserTicketDetailSerializer(existing).data
+            data["duplicate_submission"] = True
+            return Response(data)
+        except Exception:
+            for attachment in saved_attachments:
+                attachment.file.delete(save=False)
+            raise
+
+        ticket = (
+            Ticket.objects.select_related("category", "assigned_technician")
+            .prefetch_related("attachments")
+            .get(pk=ticket.pk)
+        )
+        data = UserTicketDetailSerializer(ticket).data
+        data["duplicate_submission"] = False
+        return Response(data, status=201)
+
+
+class UserTicketAttachmentDownloadView(RegularUserDashboardView):
+    def get(self, request, pk, attachment_id):
+        attachment = get_object_or_404(
+            TicketAttachment.objects.select_related("ticket"),
+            pk=attachment_id,
+            ticket_id=pk,
+            ticket__requester=request.user,
+        )
+        return FileResponse(
+            attachment.file.open("rb"),
+            as_attachment=True,
+            filename=Path(attachment.original_filename).name,
+        )

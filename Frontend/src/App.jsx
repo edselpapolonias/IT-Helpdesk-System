@@ -19,6 +19,7 @@ const TicketManagement = lazy(() => import('./pages/admin/TicketManagement'))
 const TicketDetailsPage = lazy(() => import('./pages/admin/TicketDetailsPage'))
 const TechnicianAssignment = lazy(() => import('./pages/admin/TechnicianAssignment'))
 const UserDashboard = lazy(() => import('./pages/user/UserDashboard'))
+const SubmitTicket = lazy(() => import('./pages/user/SubmitTicket'))
 const UserTicketDetailsPage = lazy(() => import('./pages/user/UserTicketDetailsPage'))
 const PasswordSetupPage = lazy(() => import('./pages/PasswordSetupPage'))
 
@@ -97,7 +98,7 @@ function App() {
               <Route path="/user" element={<UserLayout />}>
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<UserDashboard />} />
-                <Route path="tickets/new" element={<PlaceholderPage title="Submit Ticket" description="The ticket submission form will be introduced in the next Regular User module." />} />
+                <Route path="tickets/new" element={<SubmitTicket />} />
                 <Route path="tickets" element={<PlaceholderPage title="My Tickets" description="The complete ticket list and filtering workspace will be introduced in the next Regular User module." />} />
                 <Route path="tickets/:ticketId" element={<UserTicketDetailsPage />} />
                 <Route path="profile" element={<PlaceholderPage title="My Profile" description="Profile maintenance will be introduced in a future Regular User module." />} />

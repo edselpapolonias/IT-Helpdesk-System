@@ -7,6 +7,12 @@ export const priorityLabels = {
   LOW: 'Low',
 }
 
+export const urgencyLabels = {
+  LOW: 'Low',
+  NORMAL: 'Normal',
+  URGENT: 'Urgent',
+}
+
 export const statusLabels = {
   OPEN: 'Open',
   ASSIGNED: 'Assigned',

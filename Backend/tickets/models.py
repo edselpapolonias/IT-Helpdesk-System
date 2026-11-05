@@ -50,10 +50,9 @@ class Ticket(models.Model):
         CLOSED = "CLOSED", "Closed"
 
     class ReportedUrgency(models.TextChoices):
-        CRITICAL = "CRITICAL", "Critical"
-        HIGH = "HIGH", "High"
-        MEDIUM = "MEDIUM", "Medium"
         LOW = "LOW", "Low"
+        NORMAL = "NORMAL", "Normal"
+        URGENT = "URGENT", "Urgent"
 
     ALLOWED_STATUS_TRANSITIONS = {
         Status.OPEN: {Status.ASSIGNED},
@@ -69,13 +68,19 @@ class Ticket(models.Model):
         editable=False,
         default=generate_ticket_number,
     )
+    submission_key = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
     title = models.CharField(max_length=180)
     description = models.TextField()
     location = models.CharField(max_length=180, blank=True, default="")
     reported_urgency = models.CharField(
         max_length=12,
         choices=ReportedUrgency.choices,
-        default=ReportedUrgency.MEDIUM,
+        default=ReportedUrgency.NORMAL,
     )
     requester = models.ForeignKey(
         settings.AUTH_USER_MODEL,
