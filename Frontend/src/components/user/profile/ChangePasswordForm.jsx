@@ -31,7 +31,7 @@ const emptyForm = {
   confirm_new_password: '',
 }
 
-export default function ChangePasswordForm({ onChanged }) {
+export default function ChangePasswordForm({ onChanged, profileService = userProfileService }) {
   const [form, setForm] = useState(emptyForm)
   const [visible, setVisible] = useState({})
   const [errors, setErrors] = useState({})
@@ -48,7 +48,7 @@ export default function ChangePasswordForm({ onChanged }) {
     setSaving(true)
     setErrors({})
     try {
-      const result = await userProfileService.changePassword(form)
+      const result = await profileService.changePassword(form)
       setForm(emptyForm)
       onChanged(result)
     } catch (error) {

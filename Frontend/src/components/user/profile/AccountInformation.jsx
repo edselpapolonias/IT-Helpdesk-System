@@ -17,16 +17,16 @@ function Item({ icon: Icon, label, value }) {
   )
 }
 
-export default function AccountInformation({ profile }) {
+export default function AccountInformation({ profile, showIdentifier = true, showDepartment = true, identifierLabel = 'User ID' }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6">
       <h3 className="text-base font-semibold text-slate-900">Account information</h3>
       <p className="mt-1 text-xs text-slate-500">These details are managed by the helpdesk administrator.</p>
       <div className="mt-3">
-        <Item icon={IdCard} label="User ID" value={`#${profile.id}`} />
+        {showIdentifier && <Item icon={IdCard} label={identifierLabel} value={`#${profile.id}`} />}
         <Item icon={Mail} label="Email" value={profile.email} />
         <Item icon={UserRound} label="Role" value={profile.role_display} />
-        <Item icon={MapPin} label="Department / Office" value={profile.department} />
+        {showDepartment && <Item icon={MapPin} label="Department / Office" value={profile.department} />}
         <Item icon={ShieldCheck} label="Account status" value={profile.account_status} />
         <Item icon={CalendarDays} label="Registered" value={formatter.format(new Date(profile.date_joined))} />
         <Item icon={CalendarDays} label="Last login" value={profile.last_login ? formatter.format(new Date(profile.last_login)) : 'Not recorded'} />

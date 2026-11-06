@@ -27,12 +27,12 @@ const UserTicketDetailsPage = lazy(() => import('./pages/user/UserTicketDetailsP
 const UserProfile = lazy(() => import('./pages/user/UserProfile'))
 const PasswordSetupPage = lazy(() => import('./pages/PasswordSetupPage'))
 const TechnicianDashboard = lazy(() => import('./pages/technician/TechnicianDashboard'))
-const TechnicianPlaceholderPage = lazy(() => import('./pages/technician/TechnicianPlaceholderPage'))
 const MyAssignedTickets = lazy(() => import('./pages/technician/MyAssignedTickets'))
 const TechnicianTicketDetails = lazy(() => import('./pages/technician/TechnicianTicketDetails'))
 const TroubleshootingHistory = lazy(() => import('./pages/technician/TroubleshootingHistory'))
 const ResolveTicketPage = lazy(() => import('./pages/technician/ResolveTicketPage'))
 const CompletedTickets = lazy(() => import('./pages/technician/CompletedTickets'))
+const TechnicianProfile = lazy(() => import('./pages/technician/TechnicianProfile'))
 
 function PageLoader() {
   return (
@@ -125,7 +125,7 @@ function App() {
                 <Route path="tickets/:ticketId" element={<TechnicianTicketDetails />} />
                 <Route path="troubleshooting" element={<TroubleshootingHistory />} />
                 <Route path="completed" element={<CompletedTickets />} />
-                <Route path="profile" element={<TechnicianPlaceholderPage title="My Profile" description="Technician profile and account settings will be added in a dedicated module." />} />
+                <Route path="profile" element={<TechnicianProfile />} />
               </Route>
             </Route>
 

@@ -12,10 +12,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import User, UserAuditLog
-from .permissions import IsRegularUser
+from .permissions import IsITTechnician, IsRegularUser
 from .profile_serializers import (
     AvatarUploadSerializer,
     ChangePasswordSerializer,
+    TechnicianProfileSerializer,
     UserProfileSerializer,
     UserProfileUpdateSerializer,
 )
@@ -23,9 +24,10 @@ from .profile_serializers import (
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated, IsRegularUser]
+    profile_serializer_class = UserProfileSerializer
 
     def get(self, request):
-        return Response(UserProfileSerializer(request.user).data)
+        return Response(self.profile_serializer_class(request.user).data)
 
     def patch(self, request):
         with transaction.atomic():
@@ -49,12 +51,13 @@ class UserProfileView(APIView):
                     action=UserAuditLog.Action.UPDATE,
                     changes=changes,
                 )
-        return Response(UserProfileSerializer(user).data)
+        return Response(self.profile_serializer_class(user).data)
 
 
 class UserAvatarView(APIView):
     permission_classes = [IsAuthenticated, IsRegularUser]
     parser_classes = [MultiPartParser, FormParser]
+    profile_serializer_class = UserProfileSerializer
 
     def get(self, request):
         user = request.user
@@ -95,7 +98,7 @@ class UserAvatarView(APIView):
         return Response(
             {
                 "detail": "Profile picture updated successfully.",
-                "profile": UserProfileSerializer(user).data,
+                "profile": self.profile_serializer_class(user).data,
             }
         )
 
@@ -120,7 +123,7 @@ class UserAvatarView(APIView):
         return Response(
             {
                 "detail": "Profile picture removed.",
-                "profile": UserProfileSerializer(user).data,
+                "profile": self.profile_serializer_class(user).data,
             }
         )
 
@@ -147,3 +150,17 @@ class UserChangePasswordView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class TechnicianProfileView(UserProfileView):
+    permission_classes = [IsAuthenticated, IsITTechnician]
+    profile_serializer_class = TechnicianProfileSerializer
+
+
+class TechnicianAvatarView(UserAvatarView):
+    permission_classes = [IsAuthenticated, IsITTechnician]
+    profile_serializer_class = TechnicianProfileSerializer
+
+
+class TechnicianChangePasswordView(UserChangePasswordView):
+    permission_classes = [IsAuthenticated, IsITTechnician]

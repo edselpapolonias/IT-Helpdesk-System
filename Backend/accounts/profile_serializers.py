@@ -204,6 +204,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return bool(obj.profile_image)
 
 
+class TechnicianProfileSerializer(UserProfileSerializer):
+    specialization = serializers.CharField(
+        source="technician_specialization",
+        read_only=True,
+    )
+    specialization_display = serializers.CharField(
+        source="get_technician_specialization_display",
+        read_only=True,
+    )
+
+    class Meta(UserProfileSerializer.Meta):
+        fields = UserProfileSerializer.Meta.fields + (
+            "specialization",
+            "specialization_display",
+        )
+
+
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
     allowed_fields = {"first_name", "last_name", "contact_number"}
 

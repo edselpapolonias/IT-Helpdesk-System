@@ -10,7 +10,7 @@ function initials(profile) {
   return `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`.toUpperCase() || 'U'
 }
 
-export default function ProfilePictureUpload({ profile, avatarUrl, onChanged, onToast }) {
+export default function ProfilePictureUpload({ profile, avatarUrl, onChanged, onToast, profileService = userProfileService }) {
   const inputRef = useRef(null)
   const [file, setFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
@@ -52,7 +52,7 @@ export default function ProfilePictureUpload({ profile, avatarUrl, onChanged, on
     setBusy(true)
     setError('')
     try {
-      const result = await userProfileService.uploadAvatar(file)
+      const result = await profileService.uploadAvatar(file)
       onChanged(result.profile)
       clearSelection()
       onToast(result.detail)
@@ -67,7 +67,7 @@ export default function ProfilePictureUpload({ profile, avatarUrl, onChanged, on
     setBusy(true)
     setError('')
     try {
-      const result = await userProfileService.removeAvatar()
+      const result = await profileService.removeAvatar()
       onChanged(result.profile)
       setConfirmRemove(false)
       onToast(result.detail)

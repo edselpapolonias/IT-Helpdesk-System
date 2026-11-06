@@ -4,7 +4,7 @@ function getInitials(profile) {
   return `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`.toUpperCase() || 'U'
 }
 
-export default function ProfileHeader({ profile, avatarUrl }) {
+export default function ProfileHeader({ profile, avatarUrl, descriptor = '' }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
@@ -32,7 +32,10 @@ export default function ProfileHeader({ profile, avatarUrl }) {
             <Mail size={15} className="shrink-0 text-slate-400" />
             <span className="truncate">{profile.email}</span>
           </p>
-          <p className="mt-2 text-xs font-medium text-slate-400">{profile.role_display}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-400">
+            <span>{profile.role_display}</span>
+            {descriptor && <><span aria-hidden="true">·</span><span>{descriptor}</span></>}
+          </div>
         </div>
       </div>
     </section>

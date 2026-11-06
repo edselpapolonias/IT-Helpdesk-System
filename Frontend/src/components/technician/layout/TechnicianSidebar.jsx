@@ -18,7 +18,7 @@ export default function TechnicianSidebar({ collapsed, mobileOpen, onCollapse, o
         <div className={`flex h-20 items-center border-b border-white/10 px-5 ${collapsed ? 'lg:justify-center lg:px-3' : 'gap-3'}`}>
           <img className="h-11 w-11 shrink-0 object-contain" src={logo} alt="" />
           <div className={collapsed ? 'lg:hidden' : ''}>
-            <p className="text-[15px] font-bold tracking-tight">SAM Helpdesk</p>
+            <p className="text-[13px] font-bold leading-4 tracking-tight">St. Paul University Surigao</p>
             <p className="mt-0.5 text-[11px] text-emerald-100/75">Technician Workspace</p>
           </div>
           <button type="button" onClick={onMobileClose} className="ml-auto rounded-md p-2 text-emerald-100 hover:bg-white/10 lg:hidden" aria-label="Close sidebar"><X size={20} /></button>

@@ -60,7 +60,7 @@ export default function AdminSidebar({
         >
           <img className="h-11 w-11 shrink-0 object-contain" src={logo} alt="" />
           <div className={collapsed ? 'lg:hidden' : ''}>
-            <p className="text-[15px] font-bold tracking-tight">SAM Helpdesk</p>
+            <p className="text-[13px] font-bold leading-4 tracking-tight">St. Paul University Surigao</p>
             <p className="mt-0.5 text-[11px] text-emerald-100/75">
               IT Support Management
             </p>

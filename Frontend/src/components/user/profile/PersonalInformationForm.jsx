@@ -20,7 +20,7 @@ function Field({ label, name, value, onChange, error, disabled, type = 'text', n
   )
 }
 
-export default function PersonalInformationForm({ profile, onSaved }) {
+export default function PersonalInformationForm({ profile, onSaved, profileService = userProfileService }) {
   const initialForm = {
     first_name: profile.first_name || '',
     last_name: profile.last_name || '',
@@ -52,7 +52,7 @@ export default function PersonalInformationForm({ profile, onSaved }) {
         Object.entries(form).filter(([field, value]) => value !== initialForm[field]),
       )
       const result = Object.keys(changed).length
-        ? await userProfileService.update(changed)
+        ? await profileService.update(changed)
         : profile
       onSaved(result)
       setEditing(false)

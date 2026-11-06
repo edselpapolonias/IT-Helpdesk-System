@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { authService } from '../services/authService'
+import { technicianProfileService } from '../services/technicianProfileService'
 import { userProfileService } from '../services/userProfileService'
 import { AuthContext } from './authContextDefinition'
 
@@ -71,7 +72,8 @@ export function AuthProvider({ children }) {
 
     const controller = new AbortController()
     let objectUrl = ''
-    userProfileService
+    const profileService = user.role === 'TECHNICIAN' ? technicianProfileService : userProfileService
+    profileService
       .getAvatar({ signal: controller.signal })
       .then((blob) => {
         objectUrl = URL.createObjectURL(blob)
@@ -84,7 +86,7 @@ export function AuthProvider({ children }) {
       controller.abort()
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [user?.avatar_version, user?.has_avatar])
+  }, [user?.avatar_version, user?.has_avatar, user?.role])
 
   const login = useCallback(async (credentials) => {
     const result = await authService.login(credentials)
