@@ -48,7 +48,8 @@ INSTALLED_APPS = [
     # Local applications
     "accounts",
     "tickets",
-    "dashboard",    
+    "dashboard",
+    "reports",
 ]
 
 MIDDLEWARE = [

@@ -18,6 +18,7 @@ function initialFilters(searchParams) {
   return {
     ...emptyFilters,
     assignment: searchParams.get('filter') === 'unassigned' ? 'unassigned' : 'all',
+    category: searchParams.get('category') || 'all',
     priority: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(priority) ? priority : 'all',
     status: ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'REOPENED', 'CLOSED'].includes(status) ? status : 'all',
   }

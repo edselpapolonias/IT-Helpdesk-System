@@ -6,6 +6,7 @@ import AdminProtectedRoute from './components/auth/AdminProtectedRoute'
 import UserProtectedRoute from './components/auth/UserProtectedRoute'
 import TechnicianProtectedRoute from './components/auth/TechnicianProtectedRoute'
 import AdminLayout from './components/admin/layout/AdminLayout'
+import ReportsErrorBoundary from './components/admin/reports/ReportsErrorBoundary'
 import TechnicianLayout from './components/technician/layout/TechnicianLayout'
 import UserLayout from './components/user/layout/UserLayout'
 import { AuthProvider } from './context/AuthContext'
@@ -20,6 +21,7 @@ const TechnicianDetailsPage = lazy(() => import('./pages/admin/TechnicianDetails
 const TicketManagement = lazy(() => import('./pages/admin/TicketManagement'))
 const TicketDetailsPage = lazy(() => import('./pages/admin/TicketDetailsPage'))
 const TechnicianAssignment = lazy(() => import('./pages/admin/TechnicianAssignment'))
+const ReportsAnalytics = lazy(() => import('./pages/admin/ReportsAnalytics'))
 const UserDashboard = lazy(() => import('./pages/user/UserDashboard'))
 const SubmitTicket = lazy(() => import('./pages/user/SubmitTicket'))
 const MyTickets = lazy(() => import('./pages/user/MyTickets'))
@@ -75,15 +77,7 @@ function App() {
                 path="technicians/:technicianId"
                 element={<TechnicianDetailsPage />}
               />
-              <Route
-                path="reports"
-                element={
-                  <PlaceholderPage
-                    title="Reports & Analytics"
-                    description="Service performance reports and export tools will be implemented here."
-                  />
-                }
-              />
+              <Route path="reports" element={<ReportsErrorBoundary><ReportsAnalytics /></ReportsErrorBoundary>} />
               <Route
                 path="settings"
                 element={
