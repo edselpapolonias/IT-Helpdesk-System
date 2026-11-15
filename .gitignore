@@ -21,6 +21,7 @@ db.sqlite3
 staticfiles/
 media/
 private_media/
+private_backups/
 test_media/
 
 # Node / Vite

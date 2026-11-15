@@ -40,6 +40,32 @@ Render's free web services do not provide shell access. Set these backend variab
 
 The build runs `python manage.py bootstrap_admin` after migrations. It creates the account with the `ADMIN` role, or safely promotes the matching email if it already exists. Later deploys do not reset the account password.
 
+## Migrating the three existing accounts without tickets
+
+Use the account-only migration utility when the local database already has the
+Admin, Technician, and Regular User accounts that must be retained:
+
+```text
+python Backend/scripts/migrate_accounts_to_database.py
+python Backend/scripts/migrate_accounts_to_database.py --apply
+```
+
+Each command reads one JSON object from standard input in this form:
+
+```json
+{"database_url":"<Neon pooled connection string>"}
+```
+
+Run the command without `--apply` first. The utility refuses to migrate unless
+the local database contains exactly three accounts and the destination is empty
+or already contains the same three records. Applying the migration:
+
+- preserves account IDs, roles, password hashes, profile fields, and status;
+- copies Django group and user-permission relationships;
+- does not copy tickets, sessions, authentication tokens, or account audit logs;
+- verifies that the destination ticket count did not change; and
+- creates ignored backups under `Backend/private_backups/` before writing.
+
 ## Deployment behavior
 
 - The backend build installs dependencies, collects static files, and runs database migrations.
