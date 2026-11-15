@@ -7,6 +7,7 @@ import UserProtectedRoute from './components/auth/UserProtectedRoute'
 import TechnicianProtectedRoute from './components/auth/TechnicianProtectedRoute'
 import AdminLayout from './components/admin/layout/AdminLayout'
 import ReportsErrorBoundary from './components/admin/reports/ReportsErrorBoundary'
+import PageMetadata from './components/common/PageMetadata'
 import TechnicianLayout from './components/technician/layout/TechnicianLayout'
 import UserLayout from './components/user/layout/UserLayout'
 import { AuthProvider } from './context/AuthContext'
@@ -50,6 +51,7 @@ function PageLoader() {
 function App() {
   return (
     <BrowserRouter>
+      <PageMetadata />
       <AuthProvider>
         <Suspense fallback={<PageLoader />}>
           <Routes>
