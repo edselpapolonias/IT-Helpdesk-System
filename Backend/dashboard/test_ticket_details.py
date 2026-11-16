@@ -202,6 +202,9 @@ class UserTicketDetailsAPITests(APITestCase):
         )
         self.assertEqual(preview.status_code, 200)
         self.assertTrue(preview.headers["Content-Disposition"].startswith("inline"))
+        self.assertEqual(preview.headers["Content-Type"], "application/pdf")
+        self.assertEqual(preview.headers["Cache-Control"], "private, no-store")
+        self.assertEqual(preview.headers["X-Content-Type-Options"], "nosniff")
         self.assertEqual(self.client.get(private_url).status_code, 404)
 
     def test_resolution_endpoint_is_requester_scoped(self):

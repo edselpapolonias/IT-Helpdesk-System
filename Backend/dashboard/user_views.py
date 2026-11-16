@@ -1,4 +1,5 @@
 from datetime import timedelta
+import mimetypes
 from pathlib import Path
 
 from django.db import IntegrityError, transaction
@@ -663,8 +664,14 @@ class UserTicketAttachmentDownloadView(RegularUserDashboardView):
         preview_extensions = {".jpg", ".jpeg", ".png", ".pdf"}
         wants_preview = request.query_params.get("preview") == "1"
         allow_preview = Path(attachment.original_filename).suffix.lower() in preview_extensions
-        return FileResponse(
+        safe_filename = Path(attachment.original_filename).name
+        content_type = mimetypes.guess_type(safe_filename)[0] or "application/octet-stream"
+        response = FileResponse(
             attachment.file.open("rb"),
             as_attachment=not (wants_preview and allow_preview),
-            filename=Path(attachment.original_filename).name,
+            filename=safe_filename,
+            content_type=content_type,
         )
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response

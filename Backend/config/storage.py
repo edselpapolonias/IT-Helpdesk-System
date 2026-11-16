@@ -1,4 +1,6 @@
 import os
+import time
+from pathlib import PurePosixPath
 
 import cloudinary.uploader
 import cloudinary.utils
@@ -29,14 +31,17 @@ class AuthenticatedRawMediaCloudinaryStorage(RawMediaCloudinaryStorage):
 
     def _get_url(self, name):
         public_id = self._prepend_prefix(name)
-        url, _ = cloudinary.utils.cloudinary_url(
+        file_format = PurePosixPath(public_id).suffix.lstrip(".")
+        if not file_format:
+            raise ValueError("Cloudinary raw assets must include a file extension.")
+
+        return cloudinary.utils.private_download_url(
             public_id,
+            file_format,
             resource_type=self.RESOURCE_TYPE,
             type=self.DELIVERY_TYPE,
-            sign_url=True,
-            secure=True,
+            expires_at=int(time.time()) + 300,
         )
-        return url
 
     def delete(self, name):
         public_id = self._prepend_prefix(name)
