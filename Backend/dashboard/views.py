@@ -48,7 +48,12 @@ class DashboardSummaryView(AdminDashboardAPIView):
             in_progress=Count(
                 "id", filter=Q(status=Ticket.Status.IN_PROGRESS)
             ),
-            resolved=Count("id", filter=Q(status=Ticket.Status.RESOLVED)),
+            resolved=Count(
+                "id",
+                filter=Q(
+                    status__in=(Ticket.Status.RESOLVED, Ticket.Status.CLOSED)
+                ),
+            ),
             critical=Count(
                 "id",
                 filter=Q(
@@ -175,10 +180,13 @@ class TechnicianWorkloadView(AdminDashboardAPIView):
                     distinct=True,
                 ),
                 resolved_tickets=Count(
-                    "assigned_tickets",
+                    "ticket_resolutions__ticket",
                     filter=Q(
-                        assigned_tickets__status=Ticket.Status.RESOLVED,
-                        assigned_tickets__resolved_at__date__gte=start_date,
+                        ticket_resolutions__ticket__status__in=(
+                            Ticket.Status.RESOLVED,
+                            Ticket.Status.CLOSED,
+                        ),
+                        ticket_resolutions__resolved_at__date__gte=start_date,
                     ),
                     distinct=True,
                 ),

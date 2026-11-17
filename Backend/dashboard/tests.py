@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from tickets.models import Ticket, TicketCategory
+from tickets.models import Ticket, TicketCategory, TicketResolution
 
 
 User = get_user_model()
@@ -95,6 +95,24 @@ class AdminDashboardAPITests(APITestCase):
         self.assertEqual(attention.data["critical"], 1)
         self.assertEqual(attention.data["overdue"], 1)
 
+    def test_summary_keeps_requester_confirmed_tickets_in_resolved_total(self):
+        Ticket.objects.create(
+            title="Confirmed printer repair",
+            description="The requester confirmed the completed repair.",
+            requester=self.requester,
+            category=self.category,
+            status=Ticket.Status.CLOSED,
+            assigned_technician=self.technician,
+            resolved_at=timezone.now() - timedelta(minutes=5),
+            closed_at=timezone.now(),
+        )
+        self.authenticate_admin()
+
+        response = self.client.get("/api/admin/dashboard/summary/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["resolved"], 1)
+
     def test_resolved_trend_uses_resolution_date(self):
         ticket = Ticket.objects.create(
             title="Older ticket resolved today",
@@ -178,12 +196,33 @@ class AdminDashboardAPITests(APITestCase):
             status=Ticket.Status.ASSIGNED,
             assigned_technician=self.technician,
         )
-        Ticket.objects.create(
+        resolved = Ticket.objects.create(
             title="Resolved ticket",
             description="Resolved workload test.",
             requester=self.requester,
             status=Ticket.Status.RESOLVED,
             assigned_technician=self.technician,
+        )
+        TicketResolution.objects.create(
+            ticket=resolved,
+            resolved_by=self.technician,
+            resolution_summary="Issue resolved by the assigned technician.",
+        )
+        closed = Ticket.objects.create(
+            title="Closed ticket",
+            description="Requester-confirmed workload test.",
+            requester=self.requester,
+            status=Ticket.Status.CLOSED,
+            assigned_technician=self.technician,
+            resolved_at=timezone.now() - timedelta(minutes=5),
+            closed_at=timezone.now(),
+        )
+        TicketResolution.objects.create(
+            ticket=closed,
+            resolved_by=self.technician,
+            resolution_summary="Requester confirmed this resolution.",
+            resolved_at=closed.resolved_at,
+            closed_at=closed.closed_at,
         )
         self.authenticate_admin()
 
@@ -194,4 +233,4 @@ class AdminDashboardAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         technician = response.data["results"][0]
         self.assertEqual(technician["active_assigned_tickets"], 1)
-        self.assertEqual(technician["resolved_tickets"], 1)
+        self.assertEqual(technician["resolved_tickets"], 2)

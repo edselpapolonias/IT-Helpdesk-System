@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
-from tickets.models import Ticket
+from tickets.models import Ticket, TicketResolution
 
 from .models import UserAuditLog
 
@@ -243,10 +243,19 @@ class TechnicianManagementAPITests(APITestCase):
             description="Performance duration test.",
             requester=self.regular,
             assigned_technician=self.technician,
-            status=Ticket.Status.RESOLVED,
+            status=Ticket.Status.CLOSED,
+            resolved_at=timezone.now(),
+            closed_at=timezone.now(),
         )
         Ticket.objects.filter(pk=resolved.pk).update(
             created_at=timezone.now() - timedelta(hours=2)
+        )
+        TicketResolution.objects.create(
+            ticket=resolved,
+            resolved_by=self.technician,
+            resolution_summary="Resolved and confirmed by the requester.",
+            resolved_at=resolved.resolved_at,
+            closed_at=resolved.closed_at,
         )
 
         detail = self.client.get(
@@ -265,6 +274,7 @@ class TechnicianManagementAPITests(APITestCase):
         self.assertEqual(detail.data["active_assigned_tickets"], 1)
         self.assertEqual(detail.data["resolved_tickets"], 1)
         self.assertEqual(tickets.data["active_tickets"][0]["id"], active.id)
+        self.assertEqual(tickets.data["completed_tickets"][0]["id"], resolved.id)
         self.assertTrue(tickets.data["assignment_date_available"])
         self.assertEqual(performance.data["resolved_tickets"], 1)
         self.assertGreater(performance.data["average_resolution_seconds"], 7000)

@@ -8,6 +8,7 @@ from django.db.models import (
     DurationField,
     ExpressionWrapper,
     F,
+    IntegerField,
     OuterRef,
     Q,
     Subquery,
@@ -23,7 +24,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from tickets.models import Ticket, TicketAssignment
+from tickets.models import Ticket, TicketAssignment, TicketResolution
 
 from .models import User, UserAuditLog
 from .permissions import IsITAdministrator
@@ -42,6 +43,10 @@ ACTIVE_TICKET_STATUSES = (
     Ticket.Status.IN_PROGRESS,
     Ticket.Status.REOPENED,
 )
+COMPLETED_TICKET_STATUSES = (
+    Ticket.Status.RESOLVED,
+    Ticket.Status.CLOSED,
+)
 REPORTING_PERIODS = {7, 30, 90}
 WORKLOAD_RULES = {
     "none": (0, 0),
@@ -59,16 +64,19 @@ class TechnicianPagination(PageNumberPagination):
 
 def resolution_duration_expression():
     return ExpressionWrapper(
-        F("assigned_tickets__resolved_at") - F("assigned_tickets__created_at"),
+        F("ticket_resolutions__resolved_at")
+        - F("ticket_resolutions__ticket__created_at"),
         output_field=DurationField(),
     )
 
 
 def annotated_technicians():
     valid_resolution = Q(
-        assigned_tickets__status=Ticket.Status.RESOLVED,
-        assigned_tickets__resolved_at__isnull=False,
-        assigned_tickets__resolved_at__gt=F("assigned_tickets__created_at"),
+        ticket_resolutions__ticket__status__in=COMPLETED_TICKET_STATUSES,
+        ticket_resolutions__resolved_at__isnull=False,
+        ticket_resolutions__resolved_at__gt=F(
+            "ticket_resolutions__ticket__created_at"
+        ),
     )
     return User.objects.filter(role=User.Role.TECHNICIAN).annotate(
         active_assigned_tickets=Count(
@@ -77,8 +85,10 @@ def annotated_technicians():
             distinct=True,
         ),
         resolved_tickets=Count(
-            "assigned_tickets",
-            filter=Q(assigned_tickets__status=Ticket.Status.RESOLVED),
+            "ticket_resolutions__ticket",
+            filter=Q(
+                ticket_resolutions__ticket__status__in=COMPLETED_TICKET_STATUSES
+            ),
             distinct=True,
         ),
         total_current_assignments=Count("assigned_tickets", distinct=True),
@@ -338,7 +348,7 @@ class AdminTechnicianTicketsView(AdminTechnicianMixin, APIView):
             technician=technician,
             is_current=True,
         ).order_by("-id")
-        tickets = (
+        active = (
             Ticket.objects.filter(assigned_technician=technician)
             .select_related("category")
             .annotate(
@@ -347,12 +357,37 @@ class AdminTechnicianTicketsView(AdminTechnicianMixin, APIView):
                     output_field=DateTimeField(),
                 )
             )
+            .filter(status__in=ACTIVE_TICKET_STATUSES)
+            .order_by("-created_at")
         )
-        active = tickets.filter(status__in=ACTIVE_TICKET_STATUSES).order_by(
-            "-created_at"
-        )
-        completed = tickets.filter(status=Ticket.Status.RESOLVED).order_by(
-            "-resolved_at"
+        latest_resolution = TicketResolution.objects.filter(
+            ticket_id=OuterRef("pk")
+        ).order_by("-resolved_at", "-id")
+        latest_assignment = TicketAssignment.objects.filter(
+            ticket_id=OuterRef("pk"),
+            technician=technician,
+        ).order_by("-assigned_at", "-id")
+        completed = (
+            Ticket.objects.select_related("category")
+            .annotate(
+                latest_resolver_id=Subquery(
+                    latest_resolution.values("resolved_by_id")[:1],
+                    output_field=IntegerField(),
+                ),
+                latest_resolution_at=Subquery(
+                    latest_resolution.values("resolved_at")[:1],
+                    output_field=DateTimeField(),
+                ),
+                current_assignment_date=Subquery(
+                    latest_assignment.values("assigned_at")[:1],
+                    output_field=DateTimeField(),
+                ),
+            )
+            .filter(
+                latest_resolver_id=technician.id,
+                status__in=COMPLETED_TICKET_STATUSES,
+            )
+            .order_by("-latest_resolution_at", "-id")
         )
         return Response(
             {
@@ -371,16 +406,31 @@ class AdminTechnicianPerformanceView(AdminTechnicianMixin, APIView):
         days = requested_days(request)
         today = timezone.localdate()
         start_date = today - timedelta(days=days - 1)
-        resolved = Ticket.objects.filter(
-            assigned_technician=technician,
-            status=Ticket.Status.RESOLVED,
-            resolved_at__date__gte=start_date,
-            resolved_at__gt=F("created_at"),
+        latest_resolution = TicketResolution.objects.filter(
+            ticket_id=OuterRef("pk")
+        ).order_by("-resolved_at", "-id")
+        resolved = (
+            Ticket.objects.annotate(
+                latest_resolver_id=Subquery(
+                    latest_resolution.values("resolved_by_id")[:1],
+                    output_field=IntegerField(),
+                ),
+                latest_resolution_at=Subquery(
+                    latest_resolution.values("resolved_at")[:1],
+                    output_field=DateTimeField(),
+                ),
+            )
+            .filter(
+                latest_resolver_id=technician.id,
+                status__in=COMPLETED_TICKET_STATUSES,
+                latest_resolution_at__date__gte=start_date,
+                latest_resolution_at__gt=F("created_at"),
+            )
         )
         average = resolved.aggregate(
             value=Avg(
                 ExpressionWrapper(
-                    F("resolved_at") - F("created_at"),
+                    F("latest_resolution_at") - F("created_at"),
                     output_field=DurationField(),
                 )
             )
@@ -388,7 +438,7 @@ class AdminTechnicianPerformanceView(AdminTechnicianMixin, APIView):
         rows = (
             resolved.annotate(
                 day=TruncDate(
-                    "resolved_at", tzinfo=timezone.get_current_timezone()
+                    "latest_resolution_at", tzinfo=timezone.get_current_timezone()
                 )
             )
             .values("day")
