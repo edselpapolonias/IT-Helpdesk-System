@@ -178,7 +178,7 @@ export default function LoginPage() {
           </form>
 
           <p className="access-note">
-            Use your registered SAM account. Contact IT Services if you need access.
+            Use your registered account.
           </p>
         </div>
 
