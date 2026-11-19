@@ -35,7 +35,7 @@ from .technician_management_serializers import (
     TechnicianTicketSerializer,
     TechnicianUpdateSerializer,
 )
-from .user_management_views import development_setup_link
+from .user_management_views import password_setup_invitation
 
 
 ACTIVE_TICKET_STATUSES = (
@@ -220,20 +220,13 @@ class AdminTechnicianListCreateView(
                 "account_setup_completed": False,
             },
         )
-        setup_link = development_setup_link(technician)
         response_data = TechnicianDetailSerializer(
             annotated_technicians().get(pk=technician.pk)
         ).data
-        response_data["invitation"] = {
-            "sent": False,
-            "setup_link": setup_link,
-            "message": (
-                "Email delivery is not configured. Copy the development setup link securely."
-                if setup_link
-                else "Email delivery must be configured before invitations can be sent."
-            ),
-        }
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        response_data["invitation"] = password_setup_invitation(technician)
+        response = Response(response_data, status=status.HTTP_201_CREATED)
+        response["Cache-Control"] = "no-store"
+        return response
 
 
 class AdminTechnicianDetailView(
@@ -338,6 +331,20 @@ class AdminTechnicianStatusView(AdminTechnicianMixin, APIView):
         return Response(
             {"detail": detail, "technician": TechnicianDetailSerializer(refreshed).data}
         )
+
+
+class AdminTechnicianSetupLinkView(AdminTechnicianMixin, APIView):
+    def post(self, request, pk):
+        technician = self.get_object()
+        if technician.account_setup_completed or technician.has_usable_password():
+            raise ValidationError(
+                {"detail": "Password setup is already complete for this technician."}
+            )
+        response = Response(
+            {"invitation": password_setup_invitation(technician)}
+        )
+        response["Cache-Control"] = "no-store"
+        return response
 
 
 class AdminTechnicianTicketsView(AdminTechnicianMixin, APIView):

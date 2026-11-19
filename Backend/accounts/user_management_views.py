@@ -59,9 +59,7 @@ def parse_optional_date(raw_value, field_name):
     return parsed
 
 
-def development_setup_link(user):
-    if not settings.DEBUG:
-        return None
+def password_setup_link(user):
     query = urlencode(
         {
             "uid": urlsafe_base64_encode(force_bytes(user.pk)),
@@ -69,6 +67,17 @@ def development_setup_link(user):
         }
     )
     return f"{settings.FRONTEND_URL.rstrip('/')}/set-password?{query}"
+
+
+def password_setup_invitation(user):
+    return {
+        "sent": False,
+        "setup_link": password_setup_link(user),
+        "message": (
+            "Copy this secure setup link and send it privately to the account owner. "
+            "The link becomes invalid after the password is created."
+        ),
+    }
 
 
 class AdminUserListCreateView(AdminUserQuerysetMixin, generics.ListCreateAPIView):
@@ -145,18 +154,11 @@ class AdminUserListCreateView(AdminUserQuerysetMixin, generics.ListCreateAPIView
                 "account_setup_completed": False,
             },
         )
-        setup_link = development_setup_link(user)
         response_data = ManagedUserDetailSerializer(user).data
-        response_data["invitation"] = {
-            "sent": False,
-            "setup_link": setup_link,
-            "message": (
-                "Email delivery is not configured. Copy the development setup link securely."
-                if setup_link
-                else "Email delivery must be configured before invitations can be sent."
-            ),
-        }
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        response_data["invitation"] = password_setup_invitation(user)
+        response = Response(response_data, status=status.HTTP_201_CREATED)
+        response["Cache-Control"] = "no-store"
+        return response
 
 
 class AdminUserDetailView(AdminUserQuerysetMixin, generics.RetrieveUpdateAPIView):

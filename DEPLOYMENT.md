@@ -24,6 +24,10 @@ Use these values when Render asks for environment variables:
 - Backend `CSRF_TRUSTED_ORIGINS`: the same frontend URL.
 - Frontend `VITE_API_URL`: the backend URL ending in `/api`, such as `https://spus-helpdesk-api.onrender.com/api`.
 
+`FRONTEND_URL` is also used when the administrator generates a password setup
+link for a new or setup-pending account. It must be the public frontend address,
+without a trailing path.
+
 If Render assigns different service names, use the URLs shown in the Render dashboard.
 
 ## 3. Redeploy after URLs are known
@@ -72,4 +76,6 @@ or already contains the same three records. Applying the migration:
 - WhiteNoise serves Django Admin static files.
 - Uploaded profile images and ticket attachments use authenticated Cloudinary assets when `CLOUDINARY_URL` is set. Local development continues to use `Backend/private_media`.
 - `GET /api/health/` is the Render health check endpoint.
+- New technicians receive a one-time password setup link in Technician Management.
+  The administrator must copy the link and send it privately to the technician.
 - Secrets stay in environment variables and must never be committed.

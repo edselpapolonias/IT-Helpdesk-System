@@ -1,4 +1,5 @@
 from datetime import timedelta
+from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -41,8 +42,11 @@ class TechnicianManagementAPITests(APITestCase):
         )
         self.client.force_authenticate(user=self.admin)
 
-    @override_settings(DEBUG=True, FRONTEND_URL="http://localhost:5173")
-    def test_admin_creates_technician_with_secure_setup_link(self):
+    @override_settings(
+        DEBUG=False,
+        FRONTEND_URL="https://spus-helpdesk.onrender.com",
+    )
+    def test_admin_creates_technician_with_production_setup_link(self):
         response = self.client.post(
             "/api/admin/technicians/",
             {
@@ -66,13 +70,75 @@ class TechnicianManagementAPITests(APITestCase):
         )
         self.assertFalse(technician.has_usable_password())
         self.assertFalse(technician.account_setup_completed)
-        self.assertIn("uid=", response.data["invitation"]["setup_link"])
+        setup_link = response.data["invitation"]["setup_link"]
+        self.assertTrue(
+            setup_link.startswith(
+                "https://spus-helpdesk.onrender.com/set-password?"
+            )
+        )
+        self.assertIn("uid=", setup_link)
+        self.assertEqual(response["Cache-Control"], "no-store")
         self.assertTrue(
             UserAuditLog.objects.filter(
                 actor=self.admin,
                 target_user=technician,
                 action=UserAuditLog.Action.CREATE,
             ).exists()
+        )
+
+    @override_settings(
+        DEBUG=False,
+        FRONTEND_URL="https://spus-helpdesk.onrender.com",
+    )
+    def test_admin_can_generate_setup_link_for_existing_pending_technician(self):
+        pending = User(
+            username="pending-technician",
+            email="pending-technician@example.test",
+            role=User.Role.TECHNICIAN,
+            first_name="Pending",
+            last_name="Technician",
+            technician_specialization=User.TechnicianSpecialization.GENERAL,
+            account_setup_completed=False,
+        )
+        pending.set_unusable_password()
+        pending.save()
+
+        response = self.client.post(
+            f"/api/admin/technicians/{pending.id}/setup-link/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "no-store")
+        setup_link = response.data["invitation"]["setup_link"]
+        query = parse_qs(urlparse(setup_link).query)
+        self.assertIn("uid", query)
+        self.assertIn("token", query)
+
+        self.client.force_authenticate(user=None)
+        setup_response = self.client.post(
+            "/api/auth/setup-password/",
+            {
+                "uid": query["uid"][0],
+                "token": query["token"][0],
+                "password": "Secure-technician-password-2026",
+                "password_confirm": "Secure-technician-password-2026",
+            },
+            format="json",
+        )
+        self.assertEqual(setup_response.status_code, 200)
+        pending.refresh_from_db()
+        self.assertTrue(pending.account_setup_completed)
+        self.assertTrue(pending.check_password("Secure-technician-password-2026"))
+
+    def test_completed_technician_cannot_generate_another_setup_link(self):
+        response = self.client.post(
+            f"/api/admin/technicians/{self.technician.id}/setup-link/"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data["detail"],
+            "Password setup is already complete for this technician.",
         )
 
     def test_duplicate_email_and_invalid_specialization_are_rejected(self):

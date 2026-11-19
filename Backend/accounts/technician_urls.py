@@ -4,6 +4,7 @@ from .technician_management_views import (
     AdminTechnicianDetailView,
     AdminTechnicianListCreateView,
     AdminTechnicianPerformanceView,
+    AdminTechnicianSetupLinkView,
     AdminTechnicianStatisticsView,
     AdminTechnicianStatusView,
     AdminTechnicianTicketsView,
@@ -31,6 +32,11 @@ urlpatterns = [
         "<int:pk>/deactivate/",
         AdminTechnicianStatusView.as_view(action="deactivate"),
         name="admin-technician-deactivate",
+    ),
+    path(
+        "<int:pk>/setup-link/",
+        AdminTechnicianSetupLinkView.as_view(),
+        name="admin-technician-setup-link",
     ),
     path(
         "<int:pk>/tickets/",

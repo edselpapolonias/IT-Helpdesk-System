@@ -38,6 +38,10 @@ export const technicianService = {
     const response = await api.post(`/admin/technicians/${id}/deactivate/`)
     return response.data
   },
+  async setupLink(id) {
+    const response = await api.post(`/admin/technicians/${id}/setup-link/`)
+    return response.data
+  },
   async tickets(id, config = {}) {
     const response = await api.get(`/admin/technicians/${id}/tickets/`, config)
     return response.data
