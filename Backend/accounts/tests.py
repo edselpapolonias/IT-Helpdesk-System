@@ -142,6 +142,49 @@ class AdminUserManagementTests(APITestCase):
             ).exists()
         )
 
+    @override_settings(
+        DEBUG=False,
+        FRONTEND_URL="https://spus-helpdesk.onrender.com",
+    )
+    def test_admin_can_generate_setup_link_for_existing_pending_user(self):
+        pending = User(
+            username="pending-user",
+            email="pending-user@example.test",
+            role=User.Role.USER,
+            first_name="Pending",
+            last_name="User",
+            account_setup_completed=False,
+        )
+        pending.set_unusable_password()
+        pending.save()
+
+        response = self.client.post(
+            f"/api/admin/users/{pending.id}/setup-link/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "no-store")
+        setup_link = response.data["invitation"]["setup_link"]
+        self.assertTrue(
+            setup_link.startswith(
+                "https://spus-helpdesk.onrender.com/set-password?"
+            )
+        )
+        query = parse_qs(urlparse(setup_link).query)
+        self.assertIn("uid", query)
+        self.assertIn("token", query)
+
+    def test_completed_user_cannot_generate_another_setup_link(self):
+        response = self.client.post(
+            f"/api/admin/users/{self.regular.id}/setup-link/"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data["detail"],
+            "Password setup is already complete for this user.",
+        )
+
     def test_duplicate_email_is_rejected_case_insensitively(self):
         response = self.client.post(
             "/api/admin/users/",

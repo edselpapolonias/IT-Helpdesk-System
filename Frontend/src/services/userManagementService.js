@@ -45,6 +45,11 @@ export const userManagementService = {
     return response.data
   },
 
+  async setupLink(userId) {
+    const response = await api.post(`/admin/users/${userId}/setup-link/`)
+    return response.data
+  },
+
   async tickets(userId, config = {}) {
     const response = await api.get(`/admin/users/${userId}/tickets/`, config)
     return response.data

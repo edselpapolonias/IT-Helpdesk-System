@@ -33,7 +33,7 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState(null)
   const [statusUser, setStatusUser] = useState(null)
   const [invitation, setInvitation] = useState(null)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function UserManagement() {
 
   useEffect(() => {
     if (!toast) return
-    const timeout = setTimeout(() => setToast(''), 3500)
+    const timeout = setTimeout(() => setToast(null), 3500)
     return () => clearTimeout(timeout)
   }, [toast])
 
@@ -137,14 +137,23 @@ export default function UserManagement() {
     setFormOpen(false)
     setEditingUser(null)
     if (action === 'created' && user.invitation) setInvitation(user.invitation)
-    setToast(action === 'created' ? 'User account created successfully.' : 'User information updated successfully.')
+    setToast({ message: action === 'created' ? 'User account created successfully.' : 'User information updated successfully.', error: false })
     await Promise.allSettled([loadUsers(), loadStats()])
   }
 
   async function handleStatusChanged(_user, action) {
     setStatusUser(null)
-    setToast(`User account ${action} successfully.`)
+    setToast({ message: `User account ${action} successfully.`, error: false })
     await Promise.allSettled([loadUsers(), loadStats()])
+  }
+
+  async function showSetupLink(user) {
+    try {
+      const result = await userManagementService.setupLink(user.id)
+      setInvitation(result.invitation)
+    } catch (error) {
+      setToast({ message: getApiError(error, 'Unable to generate the password setup link.'), error: true })
+    }
   }
 
   const hasFilters =
@@ -186,6 +195,7 @@ export default function UserManagement() {
         onView={(user) => navigate(`/it-admin/users/${user.id}`)}
         onEdit={openEdit}
         onStatus={setStatusUser}
+        onSetup={showSetupLink}
       />
 
       <UserFormModal
@@ -198,8 +208,8 @@ export default function UserManagement() {
       <UserSetupLinkDialog invitation={invitation} onClose={() => setInvitation(null)} />
 
       {toast && (
-        <div className="fixed bottom-5 right-5 z-[90] rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-emerald-800 shadow-lg" role="status">
-          {toast}
+        <div className={`fixed bottom-5 right-5 z-[90] rounded-lg border bg-white px-4 py-3 text-sm font-semibold shadow-lg ${toast.error ? 'border-red-200 text-red-700' : 'border-emerald-200 text-emerald-800'}`} role="status">
+          {toast.message}
         </div>
       )}
     </div>

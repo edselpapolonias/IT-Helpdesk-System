@@ -76,6 +76,7 @@ or already contains the same three records. Applying the migration:
 - WhiteNoise serves Django Admin static files.
 - Uploaded profile images and ticket attachments use authenticated Cloudinary assets when `CLOUDINARY_URL` is set. Local development continues to use `Backend/private_media`.
 - `GET /api/health/` is the Render health check endpoint.
-- New technicians receive a one-time password setup link in Technician Management.
-  The administrator must copy the link and send it privately to the technician.
+- New users and technicians receive a one-time password setup link in their
+  management page. The administrator can also generate another link while an
+  account still shows `Setup pending`. Send setup links privately.
 - Secrets stay in environment variables and must never be committed.

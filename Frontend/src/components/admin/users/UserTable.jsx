@@ -1,6 +1,7 @@
 import {
   Edit3,
   Eye,
+  Link2,
   MoreHorizontal,
   Power,
   PowerOff,
@@ -30,6 +31,7 @@ export default function UserTable({
   onView,
   onEdit,
   onStatus,
+  onSetup,
 }) {
   const [openMenu, setOpenMenu] = useState(null)
   const users = state.data?.results || []
@@ -131,13 +133,18 @@ export default function UserTable({
                         <MoreHorizontal size={18} />
                       </button>
                       {openMenu === user.id && (
-                        <div className="absolute right-6 top-11 z-20 w-44 overflow-hidden rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg">
+                        <div className="absolute right-6 top-11 z-20 w-52 overflow-hidden rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg">
                           <button type="button" onClick={() => runAction(onView, user)} className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
                             <Eye size={15} /> View details
                           </button>
                           <button type="button" onClick={() => runAction(onEdit, user)} className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
                             <Edit3 size={15} /> Edit user
                           </button>
+                          {!user.account_setup_completed && (
+                            <button type="button" onClick={() => runAction(onSetup, user)} className="flex w-full items-center gap-2.5 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50">
+                              <Link2 size={15} /> Generate setup link
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => runAction(onStatus, user)}

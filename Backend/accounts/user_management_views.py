@@ -233,6 +233,18 @@ class AdminUserStatusView(AdminUserQuerysetMixin, APIView):
         )
 
 
+class AdminUserSetupLinkView(AdminUserQuerysetMixin, APIView):
+    def post(self, request, pk):
+        user = self.get_object()
+        if user.account_setup_completed or user.has_usable_password():
+            raise ValidationError(
+                {"detail": "Password setup is already complete for this user."}
+            )
+        response = Response({"invitation": password_setup_invitation(user)})
+        response["Cache-Control"] = "no-store"
+        return response
+
+
 class AdminUserTicketsView(AdminUserQuerysetMixin, APIView):
     def get(self, request, pk):
         user = self.get_object()

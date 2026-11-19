@@ -3,6 +3,7 @@ from django.urls import path
 from .user_management_views import (
     AdminUserDetailView,
     AdminUserListCreateView,
+    AdminUserSetupLinkView,
     AdminUserStatisticsView,
     AdminUserStatusView,
     AdminUserTicketsView,
@@ -22,6 +23,11 @@ urlpatterns = [
         "<int:pk>/deactivate/",
         AdminUserStatusView.as_view(action="deactivate"),
         name="admin-user-deactivate",
+    ),
+    path(
+        "<int:pk>/setup-link/",
+        AdminUserSetupLinkView.as_view(),
+        name="admin-user-setup-link",
     ),
     path(
         "<int:pk>/tickets/",
